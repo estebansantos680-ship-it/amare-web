@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1000" role="img" aria-label="Placeholder de fotografía">
+  <defs>
+    <linearGradient id="g3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e8b9ae"/>
+      <stop offset="100%" stop-color="#7a2740"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="1000" fill="url(#g3)"/>
+  <g opacity="0.10" stroke="#3f0f1c" stroke-width="2">
+    <path d="M-100 150 L900 1150 M-100 350 L900 1350 M-100 -50 L900 950 M-100 550 L900 1550"/>
+  </g>
+  <g transform="translate(400,500)" opacity="0.5">
+    <circle r="46" fill="none" stroke="#3f0f1c" stroke-width="3"/>
+    <rect x="-34" y="-24" width="68" height="48" rx="6" fill="none" stroke="#3f0f1c" stroke-width="3"/>
+    <circle r="12" fill="none" stroke="#3f0f1c" stroke-width="3"/>
+  </g>
+</svg>

@@ -1,0 +1,18 @@
+# Documentos internos del proyecto (no se publican: el repo es público)
+*.xlsx
+*.pdf
+Captura*.png
+captura*.png
+Imagen_direccion.jpeg
+logo redes sociales.png
+view-source_*.html
+CANVAS.txt
+Links.txt
+_interno/
+
+# Sistema / editor
+.claude/
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/

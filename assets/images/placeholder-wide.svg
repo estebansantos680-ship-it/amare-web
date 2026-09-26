@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 700" role="img" aria-label="Placeholder de fotografía panorámica">
+  <defs>
+    <linearGradient id="gw" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3f0f1c"/>
+      <stop offset="55%" stop-color="#5c1a2b"/>
+      <stop offset="100%" stop-color="#7a2740"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="700" fill="url(#gw)"/>
+  <g opacity="0.08" stroke="#faf6f1" stroke-width="2">
+    <path d="M-200 0 L1800 900 M-200 200 L1800 1100 M-200 -200 L1800 700 M-200 400 L1800 1300"/>
+  </g>
+  <g transform="translate(800,350)" opacity="0.5">
+    <circle r="52" fill="none" stroke="#faf6f1" stroke-width="3"/>
+    <rect x="-38" y="-27" width="76" height="54" rx="7" fill="none" stroke="#faf6f1" stroke-width="3"/>
+    <circle r="13" fill="none" stroke="#faf6f1" stroke-width="3"/>
+  </g>
+</svg>

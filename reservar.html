@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amarë — Estudio de Cabello | Reservar cita (simulador)</title>
+<meta name="description" content="Simulador de reserva de citas de Amarë: elige tu servicio, revisa el depósito estimado y envía tu solicitud por WhatsApp.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500;1,600&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="wrap">
+      <span>Síguenos en nuestras redes ¡Así nunca te perderás nuestras últimas noticias y actualizaciones!</span>
+      <a href="tel:+50688073849" class="topbar-phone">Teléfono: +506 8807-3849</a>
+    </div>
+  </div>
+
+  <header class="site">
+    <nav class="wrap">
+      <a href="index.html#inicio" class="logo-lockup">
+        <span class="logo-word">AMAR<span>Ë</span></span>
+        <span class="logo-sub">Beauty Center</span>
+      </a>
+
+      <ul class="nav-links" id="navLinks">
+        <li><a href="index.html">Inicio</a></li>
+        <li><a href="sobre-nosotros.html">Acerca de</a></li>
+        <li><a href="servicios.html" class="active">Servicios</a></li>
+        <li><a href="productos.html">Productos</a></li>
+        <li><a href="valores.html">Valores</a></li>
+        <li><a href="#contacto">Contacto</a></li>
+      </ul>
+
+      <div class="nav-cta">
+        <a class="btn-perfil" href="reservar.html">Reservar cita</a>
+        <div class="social-mini">
+          <a class="social-link" href="https://api.whatsapp.com/send?phone=50688073849&amp;text=Hola%20JulioFallasHairSalon!%20Me%20gustaria%20agendar%20una%20cita%20ustedes%20y%20cotizar%20sus%20servicios%20de%20belleza%3F%20" target="_blank" rel="noopener noreferrer" aria-label="Escríbenos por WhatsApp">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 20l1.3-4.2A7.7 7.7 0 1 1 9 18.6L4 20Z"/><path d="M8.5 9.7c0 3.3 2.7 6 6 6"/></svg>
+          </a>
+          <a class="social-link" href="https://www.instagram.com/amare_beauty_center?igsh=bHp3OWF2eWdkdmVj" target="_blank" rel="noopener noreferrer" aria-label="Síguenos en Instagram">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17" cy="7" r="0.6" fill="currentColor" stroke="none"/></svg>
+          </a>
+          <a class="social-link" href="https://waze.com/ul?ll=9.9251944,-84.1986944&amp;navigate=yes" target="_blank" rel="noopener noreferrer" aria-label="Cómo llegar por Waze">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 14.7c-1.7-1-2.7-2.8-2.7-4.8C4.3 6.4 7.8 3.7 12 3.7s7.7 2.7 7.7 6.2c0 2-1 3.8-2.7 4.8.1.7.5 1.3 1 1.8-1 .2-1.9 0-2.6-.4-.9.3-2 .5-3.4.5-.6 0-1.1 0-1.6-.1"/><circle cx="9.3" cy="9.8" r="0.9" fill="currentColor" stroke="none"/><circle cx="14.7" cy="9.8" r="0.9" fill="currentColor" stroke="none"/><path d="M9 12.9c1 .8 4 .8 5 0"/><circle cx="9" cy="18.6" r="1.2"/><circle cx="15" cy="18.6" r="1.2"/></svg>
+          </a>
+        </div>
+        <button class="menu-toggle" id="menuToggle" aria-label="Abrir menú" aria-expanded="false" aria-controls="navLinks"><span></span></button>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero">
+      <div class="wrap">
+        <p class="eyebrow">Vista previa</p>
+        <h1>Simulador de reserva de cita</h1>
+        <p>Esta es una demostración de cómo funcionará el sistema de citas de Amarë: elige tu servicio, revisa el depósito estimado y la disponibilidad. <strong>Todavía no agenda una cita real</strong> — el último paso te conecta por WhatsApp con nuestro equipo para confirmarla, igual que hoy.</p>
+      </div>
+    </section>
+
+    <section class="booking">
+      <div class="wrap">
+        <div class="booking-box" id="bookingBox">
+          <div class="booking-steps" id="bookingSteps">
+            <span class="step active" data-step="1">1. Servicio</span>
+            <span class="step" data-step="2">2. Largo de cabello</span>
+            <span class="step" data-step="3">3. Fecha y franja</span>
+            <span class="step" data-step="4">4. Resumen</span>
+          </div>
+
+          <form id="bookingForm">
+            <div class="booking-panel" data-panel="1">
+              <label for="selCategoria">Categoría</label>
+              <select id="selCategoria">
+                <option value="">Elige una categoría</option>
+                <option value="Alisamientos Capilares">Alisamientos Capilares</option>
+          <option value="Cirugía Capilar">Cirugía Capilar</option>
+          <option value="Tratamientos Capilares">Tratamientos Capilares</option>
+          <option value="Técnica de Color">Técnica de Color</option>
+          <option value="Color Parejo">Color Parejo</option>
+          <option value="Corte de Cabello">Corte de Cabello</option>
+              </select>
+
+              <label for="selServicio">Servicio</label>
+              <select id="selServicio" disabled>
+                <option value="">Elige primero una categoría</option>
+              </select>
+
+              <div class="booking-nav">
+                <span></span>
+                <button type="button" class="btn btn-solid" id="toStep2" disabled>Continuar</button>
+              </div>
+            </div>
+
+            <div class="booking-panel" data-panel="2" hidden>
+              <p class="booking-service-name" id="svcName"></p>
+              <p class="service-note" id="svcDesc"></p>
+              <label>Largo de cabello</label>
+              <div class="length-grid" id="lengthGrid"></div>
+
+              <div class="booking-nav">
+                <button type="button" class="btn btn-outline" data-prev="1">Atrás</button>
+                <button type="button" class="btn btn-solid" id="toStep3" disabled>Continuar</button>
+              </div>
+            </div>
+
+            <div class="booking-panel" data-panel="3" hidden>
+              <label for="inpFecha">Fecha</label>
+              <input type="date" id="inpFecha">
+              <p class="service-note">Atendemos de martes a sábado, 9:00 a.m. a 6:00 p.m. Domingo y lunes cerrado.</p>
+
+              <label>Franja</label>
+              <div class="franja-grid">
+                <button type="button" class="franja-option" data-franja="Mañana">Mañana</button>
+                <button type="button" class="franja-option" data-franja="Tarde">Tarde</button>
+              </div>
+
+              <div id="availabilityResult" class="availability-result" hidden></div>
+
+              <div class="booking-nav">
+                <button type="button" class="btn btn-outline" data-prev="2">Atrás</button>
+                <button type="button" class="btn btn-solid" id="toStep4" disabled>Continuar</button>
+              </div>
+            </div>
+
+            <div class="booking-panel" data-panel="4" hidden>
+              <div class="booking-summary" id="bookingSummary"></div>
+
+              <label class="policy-check">
+                <input type="checkbox" id="chkPolicy">
+                Entiendo que el depósito se descuenta del total del servicio y que las cancelaciones con menos de 72 horas de anticipación no tienen reembolso.
+              </label>
+
+              <div class="booking-nav">
+                <button type="button" class="btn btn-outline" data-prev="3">Atrás</button>
+                <a href="#" id="whatsappSubmit" class="btn btn-solid disabled-link" target="_blank" rel="noopener noreferrer">Enviar solicitud por WhatsApp</a>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <p class="booking-disclaimer">* Simulación con fines de demostración. La disponibilidad por franja se genera automáticamente para esta vista previa y no refleja la agenda real del salón todavía. Montos de depósito, datos SINPE y reglas de compatibilidad entre servicios están pendientes de confirmación final con el equipo de Amarë.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer id="contacto">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div>
+          <h4>Contáctanos</h4>
+          <p><a href="tel:+50688073849">+506 8807-3849</a></p>
+          <p><a href="mailto:preguntar@amare.com">preguntar@amare.com</a></p>
+        </div>
+        <div>
+          <h4>Dirección</h4>
+          <address>Heredia, Belén, Centro Comercial El Cafetal, Local #13</address>
+        </div>
+        <div>
+          <h4>Horarios</h4>
+          <p>Lunes a sábado: 9:00am – 6:00pm</p>
+          <p>Domingo: cerrado</p>
+        </div>
+        <div>
+          <h4>Encuéntranos aquí</h4>
+          <div class="map-box">
+            <iframe src="https://www.google.com/maps?q=9.9251944,-84.1986944&z=17&output=embed" title="Mapa de ubicación de Amarë" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+          </div>
+          <div class="map-actions">
+            <a href="https://www.google.com/maps/place/9%C2%B055'30.7%22N+84%C2%B011'55.3%22W/@9.9254045,-84.1989001,18z/data=!4m4!3m3!8m2!3d9.9251944!4d-84.1986944!18m1!1e1?entry=ttu&amp;g_ep=EgoyMDI2MDcyMi4wIKXMDSoASAFQAw%3D%3D" target="_blank" rel="noopener noreferrer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.4"/></svg>
+              Google Maps
+            </a>
+            <a href="https://waze.com/ul?ll=9.9251944,-84.1986944&amp;navigate=yes" target="_blank" rel="noopener noreferrer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 14.7c-1.7-1-2.7-2.8-2.7-4.8C4.3 6.4 7.8 3.7 12 3.7s7.7 2.7 7.7 6.2c0 2-1 3.8-2.7 4.8.1.7.5 1.3 1 1.8-1 .2-1.9 0-2.6-.4-.9.3-2 .5-3.4.5-.6 0-1.1 0-1.6-.1"/><circle cx="9.3" cy="9.8" r="0.9" fill="currentColor" stroke="none"/><circle cx="14.7" cy="9.8" r="0.9" fill="currentColor" stroke="none"/><path d="M9 12.9c1 .8 4 .8 5 0"/><circle cx="9" cy="18.6" r="1.2"/><circle cx="15" cy="18.6" r="1.2"/></svg>
+              Waze
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <a href="index.html#inicio" class="logo-lockup">
+          <span class="logo-word">AMAR<span>Ë</span></span>
+          <span class="logo-sub">Beauty Center</span>
+        </a>
+        <span>© 2026 Amarë. Todos los derechos reservados.</span>
+        <div class="foot-social">
+          <a class="social-link" href="https://www.facebook.com/shinestyle2020/" target="_blank" rel="noopener noreferrer" aria-label="Síguenos en Facebook">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M14 21v-7h2.5l.5-3H14V9c0-.9.3-1.5 1.7-1.5H17V4.8c-.3 0-1.2-.1-2.3-.1-2.3 0-3.7 1.4-3.7 3.9V11H8.5v3H11v7Z"/></svg>
+          </a>
+          <a class="social-link" href="https://www.instagram.com/amare_beauty_center?igsh=bHp3OWF2eWdkdmVj" target="_blank" rel="noopener noreferrer" aria-label="Síguenos en Instagram">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17" cy="7" r="0.6" fill="currentColor" stroke="none"/></svg>
+          </a>
+          <a class="social-link" href="https://api.whatsapp.com/send?phone=50688073849&amp;text=Hola%20JulioFallasHairSalon!%20Me%20gustaria%20agendar%20una%20cita%20ustedes%20y%20cotizar%20sus%20servicios%20de%20belleza%3F%20" target="_blank" rel="noopener noreferrer" aria-label="Escríbenos por WhatsApp">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 20l1.3-4.2A7.7 7.7 0 1 1 9 18.6L4 20Z"/><path d="M8.5 9.7c0 3.3 2.7 6 6 6"/></svg>
+          </a>
+          <a class="social-link" href="https://waze.com/ul?ll=9.9251944,-84.1986944&amp;navigate=yes" target="_blank" rel="noopener noreferrer" aria-label="Cómo llegar por Waze">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 14.7c-1.7-1-2.7-2.8-2.7-4.8C4.3 6.4 7.8 3.7 12 3.7s7.7 2.7 7.7 6.2c0 2-1 3.8-2.7 4.8.1.7.5 1.3 1 1.8-1 .2-1.9 0-2.6-.4-.9.3-2 .5-3.4.5-.6 0-1.1 0-1.6-.1"/><circle cx="9.3" cy="9.8" r="0.9" fill="currentColor" stroke="none"/><circle cx="14.7" cy="9.8" r="0.9" fill="currentColor" stroke="none"/><path d="M9 12.9c1 .8 4 .8 5 0"/><circle cx="9" cy="18.6" r="1.2"/><circle cx="15" cy="18.6" r="1.2"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+  <script src="js/services-data.js"></script>
+  <script src="js/booking.js"></script>
+</body>
+</html>
