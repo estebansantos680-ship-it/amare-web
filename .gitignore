@@ -16,3 +16,6 @@ Thumbs.db
 desktop.ini
 .DS_Store
 .vscode/
+
+# Respaldo de DNS (se guarda solo en local)
+dns-github-pages.txt

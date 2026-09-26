@@ -60,6 +60,36 @@
     }, 5000);
   });
 
+  /* ---------- Videos: se cargan y reproducen solo cuando están en pantalla ---------- */
+  var videos = document.querySelectorAll('video.lazy-video');
+  if (videos.length && 'IntersectionObserver' in window && !reduceMotion) {
+    var tryPlay = function (video) {
+      if (!video._inView) return;
+      var playing = video.play();
+      if (playing && playing.catch) playing.catch(function () {});
+    };
+    var vio = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        var video = entry.target;
+        video._inView = entry.isIntersecting;
+        if (entry.isIntersecting) {
+          var source = video.querySelector('source[data-src]');
+          if (source) {
+            source.src = source.getAttribute('data-src');
+            source.removeAttribute('data-src');
+            video.addEventListener('canplay', function () { tryPlay(video); });
+            video.load();
+          } else {
+            tryPlay(video);
+          }
+        } else {
+          video.pause();
+        }
+      });
+    }, { threshold: 0.2 });
+    videos.forEach(function (v) { vio.observe(v); });
+  }
+
   /* ---------- "Leer más" — sección Sobre nosotros (sobre-nosotros.html) ---------- */
   var readMoreBtn = document.getElementById('readMoreBtn');
   var readMoreText = document.querySelector('.about-extra');

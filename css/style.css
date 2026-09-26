@@ -1,5 +1,5 @@
 /* =========================================================
-   AMARË — Hair Studio
+   AMARË — Beauty Center
    Sistema visual basado en la Guía de Identidad de Marca:
    · Negro profundo #0B0B0B · Crema elegante #F5F3EF
    · Titulares: Playfair Display · Subtextos: Montserrat (interletrado amplio)
@@ -280,6 +280,20 @@ nav.wrap{
   opacity:.8; transition:.3s;
 }
 .strip-item:hover span.more{ opacity:1; letter-spacing:.32em; }
+
+/* ---------- VIDEOS (en el estudio) ---------- */
+.motion-reel{ padding:clamp(70px, 9vw, 110px) 0 0; }
+.reel-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:clamp(12px, 2vw, 24px); }
+.reel-item{ position:relative; border-radius:var(--radius-lg); overflow:hidden; aspect-ratio:4/5; background:var(--mocha); }
+.reel-item:nth-child(2){ transform:translateY(clamp(0px, 3vw, 40px)); }
+.reel-item video{ width:100%; height:100%; object-fit:cover; display:block; }
+.reel-item::after{ content:''; position:absolute; inset:0; background:linear-gradient(180deg, transparent 55%, rgba(11,11,11,.7)); pointer-events:none; }
+.reel-item figcaption{
+  position:absolute; left:clamp(16px, 2vw, 26px); right:16px; bottom:clamp(16px, 2vw, 24px); z-index:1;
+  color:var(--cream); font-family:var(--serif); font-style:italic; font-size:clamp(1.15rem, 1.8vw, 1.45rem);
+}
+.reel-item figcaption .eyebrow{ display:block; color:var(--taupe); font-style:normal; margin-bottom:6px; }
+.page-hero .page-hero-bg video{ width:100%; height:100%; object-fit:cover; opacity:.5; }
 
 /* ---------- SPLIT (bloque imagen + texto) ---------- */
 .split{ padding:clamp(70px, 9vw, 120px) 0; }
@@ -605,6 +619,9 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
   .location-photo{ max-width:440px; margin:0 auto; width:100%; }
   .mv-grid{ grid-template-columns:1fr; }
   .gallery-grid{ grid-template-columns:1fr 1fr; }
+  .reel-grid{ grid-template-columns:1fr; max-width:560px; margin:0 auto; }
+  .reel-item{ aspect-ratio:16/10; }
+  .reel-item:nth-child(2){ transform:none; }
 }
 /* Celular */
 @media (max-width:600px){
