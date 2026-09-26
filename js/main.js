@@ -22,6 +22,44 @@
     });
   }
 
+  /* ---------- Sombra del header al hacer scroll ---------- */
+  var header = document.querySelector('header.site');
+  if (header) {
+    var onScroll = function () { header.classList.toggle('scrolled', window.scrollY > 10); };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  }
+
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- Aparición de secciones al hacer scroll ---------- */
+  var reveals = document.querySelectorAll('.reveal');
+  if ('IntersectionObserver' in window && !reduceMotion) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+    reveals.forEach(function (el) { io.observe(el); });
+  } else {
+    reveals.forEach(function (el) { el.classList.add('in'); });
+  }
+
+  /* ---------- Fundido entre fotos (efecto "GIF" del hero) ---------- */
+  document.querySelectorAll('.fade-slides').forEach(function (box) {
+    var slides = box.querySelectorAll('img');
+    if (slides.length < 2 || reduceMotion) return;
+    var i = 0;
+    setInterval(function () {
+      slides[i].classList.remove('is-active');
+      i = (i + 1) % slides.length;
+      slides[i].classList.add('is-active');
+    }, 5000);
+  });
+
   /* ---------- "Leer más" — sección Sobre nosotros (sobre-nosotros.html) ---------- */
   var readMoreBtn = document.getElementById('readMoreBtn');
   var readMoreText = document.querySelector('.about-extra');
