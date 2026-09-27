@@ -1,10 +1,10 @@
 /* AMARË — Reserva de cita en línea (reservar.html)
    Flujo: servicio → largo → fecha/franja → datos del cliente → confirmar.
    Al confirmar:
-     1. Se envía un correo automático con el pedido a facturas@amarecr.com
-        (vía FormSubmit) y una copia de agradecimiento al correo del cliente
-        (_autoresponse). La fecha va también en formato AAAA-MM-DD para la
-        futura automatización con Google Calendar.
+     1. Se envían dos correos (vía FormSubmit):
+        - Al negocio (facturas@amarecr.com): pedido completo + "datos_json"
+          para la automatización en Python → Google Calendar.
+        - Al cliente: saludo personalizado + tabla del pedido + gracias final.
      2. Se abre WhatsApp con el resumen para que el equipo confirme el espacio.
    Datos de servicios y precios: js/services-data.js */
 (function () {
@@ -12,9 +12,12 @@
 
   var SERVICES = window.AMARE_SERVICES || [];
   var WHATSAPP_NUMBER = '50688073849';
-  // Correo que recibe cada solicitud. FormSubmit pide activarlo una sola vez
-  // (llega un correo de "Activate form" a esta dirección).
-  var FORM_ENDPOINT = 'https://formsubmit.co/ajax/facturas@amarecr.com';
+  // FormSubmit pide activar cada dirección una sola vez ("Activate form").
+  // facturas@  → reenvía al Gmail del negocio (pedido completo + datos_json).
+  // confirmaciones@ → solo dispara el correo de agradecimiento al cliente;
+  //                   Cloudflare descarta la copia que llega a esta dirección.
+  var ENDPOINT_NEGOCIO = 'https://formsubmit.co/ajax/facturas@amarecr.com';
+  var ENDPOINT_CLIENTE = 'https://formsubmit.co/ajax/confirmaciones@amarecr.com';
 
   var state = {
     service: null,
@@ -366,32 +369,15 @@
     return 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(lines.join('\n'));
   }
 
-  // Texto de agradecimiento que recibe el cliente. FormSubmit lo muestra arriba
-  // y debajo adjunta la tabla con el resumen del pedido.
-  function mensajeCliente() {
-    var nombre = state.cliente.nombre.split(' ')[0];
-    return '¡Muchas gracias por su pedido, ' + nombre + '! En Amarë Beauty Center estamos muy contentos de atenderle. ' +
-      'Abajo encontrará el resumen de lo que solicitó; en breve le escribimos por WhatsApp para confirmar la hora de su cita.';
-  }
-
-  function emailPayload() {
+  // Filas del pedido (se usan en ambos correos, en este orden).
+  function filasPedido() {
     var s = state.service;
     var c = state.cliente;
     var tier = state.tier;
     var deposito = currentDeposito();
-
-    // Los campos van en este orden en la tabla del correo (negocio y cliente).
     return {
-      _subject: 'Nueva cita: ' + s.servicio + ' · ' + state.fecha + ' ' + state.franja + ' · ' + c.nombre,
-      _template: 'table',
-      _captcha: 'false',
-      _replyto: c.correo,
-      _honey: '',
       'Nombre': c.nombre,
       'Celular': c.celular,
-      // FormSubmit envía la respuesta automática (_autoresponse) al campo llamado "email".
-      'email': c.correo,
-      _autoresponse: mensajeCliente(),
       'Servicio': s.servicio,
       'Categoría': s.categoria,
       'Largo de cabello': state.lengthLabel,
@@ -401,12 +387,84 @@
       'Momento del día': state.franja,
       'Depósito': deposito.requerido ? money(deposito.monto) + ' (se descuenta del total)' : 'No requiere',
       'Comentarios': c.notas || '—',
-      '¡Gracias!': 'Esperamos su visita con mucha ilusión. Amarë Beauty Center · +506 8807-3849 · amarecr.com',
     };
   }
 
-  function enviarCorreo(payload) {
-    return fetch(FORM_ENDPOINT, {
+  // Datos estructurados para la automatización (Python → Google Calendar).
+  function datosAutomatizacion() {
+    var s = state.service;
+    var c = state.cliente;
+    var tier = state.tier;
+    var deposito = currentDeposito();
+    return {
+      version: 1,
+      origen: 'amarecr.com/reservar',
+      enviado: new Date().toISOString(),
+      cliente: { nombre: c.nombre, celular: c.celular, correo: c.correo },
+      servicio: {
+        codigo: s.codigo || '',
+        nombre: s.servicio,
+        categoria: s.categoria,
+        largo: state.lengthLabel,
+        precio_min: tier.min,
+        precio_max: tier.max,
+        duracion_min_h: tier.durMin,
+        duracion_max_h: tier.durMax,
+      },
+      cita: { fecha: state.fecha, franja: state.franja, horario_sugerido: s.horario || '' },
+      deposito: { requerido: deposito.requerido, monto: deposito.monto },
+      comentarios: c.notas || '',
+    };
+  }
+
+  function assign(target) {
+    for (var i = 1; i < arguments.length; i++) {
+      var src = arguments[i];
+      for (var k in src) if (Object.prototype.hasOwnProperty.call(src, k)) target[k] = src[k];
+    }
+    return target;
+  }
+
+  // Correo 1 → negocio (facturas@ → Gmail): todo el pedido + datos_json para la automatización.
+  function payloadNegocio() {
+    var s = state.service;
+    var c = state.cliente;
+    return assign(
+      {
+        _subject: 'Nueva cita: ' + s.servicio + ' · ' + state.fecha + ' ' + state.franja + ' · ' + c.nombre,
+        _template: 'table',
+        _captcha: 'false',
+        _replyto: c.correo,
+        _honey: '',
+      },
+      filasPedido(),
+      { 'Correo': c.correo, 'datos_json': JSON.stringify(datosAutomatizacion()) }
+    );
+  }
+
+  // Correo 2 → cliente: FormSubmit le envía el saludo (_autoresponse) + la tabla del pedido.
+  // La copia que llega a confirmaciones@ se descarta en Cloudflare.
+  function payloadCliente() {
+    var c = state.cliente;
+    var nombre = c.nombre.split(' ')[0];
+    return assign(
+      {
+        _subject: 'Resumen de su reserva en Amarë Beauty Center',
+        _template: 'table',
+        _captcha: 'false',
+        _honey: '',
+        _autoresponse: 'Hola ' + nombre + ', ¡muchas gracias por su pedido! En Amarë Beauty Center estamos muy contentos de atenderle. ' +
+          'Este es el resumen de su pedido; en breve le escribimos por WhatsApp para confirmar la hora de su cita.',
+        // FormSubmit envía la respuesta automática al campo llamado "email".
+        email: c.correo,
+      },
+      filasPedido(),
+      { '¡Gracias!': 'Esperamos su visita con mucha ilusión. Amarë Beauty Center · +506 8807-3849 · amarecr.com' }
+    );
+  }
+
+  function enviarCorreo(endpoint, payload) {
+    return fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify(payload),
@@ -420,7 +478,8 @@
   els.btnConfirmar.addEventListener('click', function () {
     if (!els.chkPolicy.checked || !state.cliente) return;
     var wa = whatsappUrl();
-    var payload = emailPayload();
+    var negocio = payloadNegocio();
+    var cliente = payloadCliente();
 
     // WhatsApp se abre dentro del mismo clic para que el navegador no lo bloquee.
     window.open(wa, '_blank', 'noopener');
@@ -428,13 +487,20 @@
     els.btnConfirmar.classList.add('is-loading');
     els.btnConfirmar.textContent = 'Enviando…';
 
-    // Un reintento por si la conexión del celular falla en el primer intento.
-    enviarCorreo(payload)
-      .catch(function () { return enviarCorreo(payload); })
-      .catch(function (err) {
-        // Aunque falle el correo, la solicitud ya salió por WhatsApp.
-        if (window.console) console.warn('No se pudo enviar el correo de la reserva:', err);
-      })
+    // Cada correo tiene un reintento por si la conexión del celular falla.
+    // Aunque falle alguno, la solicitud ya salió por WhatsApp.
+    function conReintento(endpoint, payload) {
+      return enviarCorreo(endpoint, payload)
+        .catch(function () { return enviarCorreo(endpoint, payload); })
+        .catch(function (err) {
+          if (window.console) console.warn('No se pudo enviar el correo (' + endpoint + '):', err);
+        });
+    }
+
+    Promise.all([
+      conReintento(ENDPOINT_NEGOCIO, negocio),
+      conReintento(ENDPOINT_CLIENTE, cliente),
+    ])
       .then(function () {
         els.doneTitle.textContent = '¡Gracias, ' + state.cliente.nombre.split(' ')[0] + '! Recibimos tu solicitud';
         els.doneWhatsapp.href = wa;
