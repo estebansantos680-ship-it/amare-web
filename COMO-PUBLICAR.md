@@ -80,8 +80,8 @@ Custom domain: `amarecr.com`. Cuando GitHub emita el certificado, marcar **Enfor
 
 - Cada reserva confirmada en `reservar.html` hace dos cosas: abre WhatsApp con el resumen y envía un correo
   automático (vía [FormSubmit](https://formsubmit.co), ya activado) a **facturas@amarecr.com**.
-- El correo incluye un campo `datos_json` con la cita estructurada (fecha, franja, servicio, cliente, depósito),
-  pensado para la futura automatización con Google Calendar.
+- El cliente recibe una copia de agradecimiento con el resumen (FormSubmit `_autoresponse`, solo texto).
+- La tabla del correo trae la fecha también en formato `AAAA-MM-DD` para la futura automatización con Google Calendar.
 - **facturas@amarecr.com es un reenvío, no un buzón:** Cloudflare → Email Routing lo reenvía a
   `estebansantos680@gmail.com`. No tiene contraseña ni bandeja propia.
 - **Pendiente (decisión del cliente):** pasar a un buzón real con Google Workspace (recomendado por la integración con

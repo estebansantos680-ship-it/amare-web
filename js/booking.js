@@ -2,8 +2,9 @@
    Flujo: servicio → largo → fecha/franja → datos del cliente → confirmar.
    Al confirmar:
      1. Se envía un correo automático con el pedido a facturas@amarecr.com
-        (vía FormSubmit). Incluye un campo "datos_json" pensado para que la
-        automatización de Google Calendar lo lea sin tener que interpretar texto.
+        (vía FormSubmit) y una copia de agradecimiento al correo del cliente
+        (_autoresponse). La fecha va también en formato AAAA-MM-DD para la
+        futura automatización con Google Calendar.
      2. Se abre WhatsApp con el resumen para que el equipo confirme el espacio.
    Datos de servicios y precios: js/services-data.js */
 (function () {
@@ -365,40 +366,12 @@
     return 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(lines.join('\n'));
   }
 
-  // Correo de agradecimiento que recibe el cliente (texto plano).
+  // Texto de agradecimiento que recibe el cliente. FormSubmit lo muestra arriba
+  // y debajo adjunta la tabla con el resumen del pedido.
   function mensajeCliente() {
-    var s = state.service;
-    var c = state.cliente;
-    var deposito = currentDeposito();
-    var lines = [
-      'AMARË Beauty Center',
-      '',
-      '¡Hola ' + c.nombre.split(' ')[0] + '!',
-      '',
-      'Gracias por elegirnos. Estamos muy contentos de atenderte y ya recibimos tu solicitud de cita.',
-      'En breve te escribimos por WhatsApp al ' + c.celular + ' para confirmar la hora exacta' +
-        (deposito.requerido ? ' y los detalles del depósito.' : '.'),
-      '',
-      'RESUMEN DE TU SOLICITUD',
-      '• Servicio: ' + s.servicio + ' (' + s.categoria + ')',
-      '• Largo de cabello: ' + state.lengthLabel,
-      '• Precio estimado: ' + priceRangeLabel(state.tier),
-      '• Duración estimada: ' + (durationLabel(state.tier) || 'Por confirmar'),
-      '• Fecha: ' + fechaLegible(state.fecha) + ' — ' + state.franja,
-      '• Depósito: ' + (deposito.requerido ? money(deposito.monto) + ' (se descuenta del total)' : 'No requiere'),
-    ];
-    if (c.notas) lines.push('• Tus comentarios: ' + c.notas);
-    lines.push(
-      '',
-      'Recuerda: las cancelaciones con menos de 72 horas de anticipación no tienen reembolso del depósito.',
-      '',
-      '¿Dudas? Escríbenos por WhatsApp al +506 8807-3849.',
-      'Calle 42, San José, Costa Rica · Lunes a sábado, 9:00 a.m. – 6:00 p.m.',
-      '',
-      'La belleza no comienza en el espejo, sino en cómo nos sentimos.',
-      'Equipo Amarë · https://amarecr.com'
-    );
-    return lines.join('\n');
+    var nombre = state.cliente.nombre.split(' ')[0];
+    return '¡Muchas gracias por su pedido, ' + nombre + '! En Amarë Beauty Center estamos muy contentos de atenderle. ' +
+      'Abajo encontrará el resumen de lo que solicitó; en breve le escribimos por WhatsApp para confirmar la hora de su cita.';
   }
 
   function emailPayload() {
@@ -406,28 +379,8 @@
     var c = state.cliente;
     var tier = state.tier;
     var deposito = currentDeposito();
-    var enviado = new Date();
 
-    var datos = {
-      version: 1,
-      origen: 'amarecr.com/reservar',
-      enviado: enviado.toISOString(),
-      cliente: { nombre: c.nombre, celular: c.celular, correo: c.correo },
-      servicio: {
-        codigo: s.codigo || '',
-        nombre: s.servicio,
-        categoria: s.categoria,
-        largo: state.lengthLabel,
-        precio_min: tier.min,
-        precio_max: tier.max,
-        duracion_min_h: tier.durMin,
-        duracion_max_h: tier.durMax,
-      },
-      cita: { fecha: state.fecha, franja: state.franja, horario_sugerido: s.horario || '' },
-      deposito: { requerido: deposito.requerido, monto: deposito.monto },
-      comentarios: c.notas || '',
-    };
-
+    // Los campos van en este orden en la tabla del correo (negocio y cliente).
     return {
       _subject: 'Nueva cita: ' + s.servicio + ' · ' + state.fecha + ' ' + state.franja + ' · ' + c.nombre,
       _template: 'table',
@@ -441,16 +394,14 @@
       _autoresponse: mensajeCliente(),
       'Servicio': s.servicio,
       'Categoría': s.categoria,
-      'Código de servicio': s.codigo || '',
       'Largo de cabello': state.lengthLabel,
       'Precio estimado': priceRangeLabel(tier),
       'Duración estimada': durationLabel(tier) || 'Por confirmar',
       'Fecha': fechaLegible(state.fecha) + ' (' + state.fecha + ')',
       'Momento del día': state.franja,
-      'Depósito': deposito.requerido ? money(deposito.monto) : 'No requiere',
+      'Depósito': deposito.requerido ? money(deposito.monto) + ' (se descuenta del total)' : 'No requiere',
       'Comentarios': c.notas || '—',
-      'Enviado': enviado.toLocaleString('es-CR'),
-      'datos_json': JSON.stringify(datos),
+      '¡Gracias!': 'Esperamos su visita con mucha ilusión. Amarë Beauty Center · +506 8807-3849 · amarecr.com',
     };
   }
 
