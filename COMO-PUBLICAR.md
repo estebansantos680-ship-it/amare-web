@@ -76,7 +76,23 @@ Custom domain: `amarecr.com`. Cuando GitHub emita el certificado, marcar **Enfor
 
 ---
 
-## 4. Créditos de fotos y videos
+## 4. Reservas y correo facturas@amarecr.com
+
+- Cada reserva confirmada en `reservar.html` hace dos cosas: abre WhatsApp con el resumen y envía un correo
+  automático (vía [FormSubmit](https://formsubmit.co), ya activado) a **facturas@amarecr.com**.
+- El correo incluye un campo `datos_json` con la cita estructurada (fecha, franja, servicio, cliente, depósito),
+  pensado para la futura automatización con Google Calendar.
+- **facturas@amarecr.com es un reenvío, no un buzón:** Cloudflare → Email Routing lo reenvía a
+  `estebansantos680@gmail.com`. No tiene contraseña ni bandeja propia.
+- **Pendiente (decisión del cliente):** pasar a un buzón real con Google Workspace (recomendado por la integración con
+  Calendar) o a un Gmail propio del negocio. Al cambiar:
+  - Workspace/Zoho: agregar sus registros MX en Cloudflare y **desactivar Email Routing** (no pueden convivir).
+  - Gmail del negocio: solo cambiar el destino en Cloudflare → Email Routing → Routing rules.
+  - El sitio no cambia en ningún caso.
+
+---
+
+## 5. Créditos de fotos y videos
 
 Fotos de [Unsplash](https://unsplash.com/license) y videos de [Pexels](https://www.pexels.com/license/):
 uso comercial gratuito, sin atribución obligatoria. Reemplazar por fotos reales del estudio cuando estén disponibles.
