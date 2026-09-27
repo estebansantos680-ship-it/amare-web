@@ -78,10 +78,15 @@ Custom domain: `amarecr.com`. Cuando GitHub emita el certificado, marcar **Enfor
 
 ## 4. Reservas y correo facturas@amarecr.com
 
-- Cada reserva confirmada en `reservar.html` hace dos cosas: abre WhatsApp con el resumen y envía un correo
-  automático (vía [FormSubmit](https://formsubmit.co), ya activado) a **facturas@amarecr.com**.
-- El cliente recibe una copia de agradecimiento con el resumen (FormSubmit `_autoresponse`, solo texto).
-- La tabla del correo trae la fecha también en formato `AAAA-MM-DD` para la futura automatización con Google Calendar.
+- Cada reserva confirmada en `reservar.html` abre WhatsApp con el resumen y envía **dos correos**:
+  1. **Negocio → facturas@amarecr.com** vía [FormSubmit](https://formsubmit.co) (gratis, sin límite): pedido completo +
+     campo `datos_json` para la automatización en Python → Google Calendar.
+  2. **Cliente** vía [EmailJS](https://dashboard.emailjs.com) (plan gratis: 200 envíos/mes): correo con diseño de la
+     plantilla `emails/confirmacion-cliente.html`. IDs en `js/booking.js` (objeto `EMAILJS`).
+     Si EmailJS falla o se acaba la cuota, se envía un respaldo de texto por FormSubmit a través de
+     `confirmaciones@amarecr.com` (alias de facturas@).
+- Si cambias el diseño del correo del cliente: edita `emails/confirmacion-cliente.html` y pégalo de nuevo en
+  EmailJS → Email Templates → template_nrvafoo.
 - **El correo del dominio está en Google Workspace** (buzón real `facturas@amarecr.com`, se entra por gmail.com).
   Cloudflare Email Routing fue desactivado. DNS de correo en Cloudflare:
   - `MX @ → smtp.google.com` (prioridad 1)
