@@ -82,13 +82,14 @@ Custom domain: `amarecr.com`. Cuando GitHub emita el certificado, marcar **Enfor
   automático (vía [FormSubmit](https://formsubmit.co), ya activado) a **facturas@amarecr.com**.
 - El cliente recibe una copia de agradecimiento con el resumen (FormSubmit `_autoresponse`, solo texto).
 - La tabla del correo trae la fecha también en formato `AAAA-MM-DD` para la futura automatización con Google Calendar.
-- **facturas@amarecr.com es un reenvío, no un buzón:** Cloudflare → Email Routing lo reenvía a
-  `estebansantos680@gmail.com`. No tiene contraseña ni bandeja propia.
-- **Pendiente (decisión del cliente):** pasar a un buzón real con Google Workspace (recomendado por la integración con
-  Calendar) o a un Gmail propio del negocio. Al cambiar:
-  - Workspace/Zoho: agregar sus registros MX en Cloudflare y **desactivar Email Routing** (no pueden convivir).
-  - Gmail del negocio: solo cambiar el destino en Cloudflare → Email Routing → Routing rules.
-  - El sitio no cambia en ningún caso.
+- **El correo del dominio está en Google Workspace** (buzón real `facturas@amarecr.com`, se entra por gmail.com).
+  Cloudflare Email Routing fue desactivado. DNS de correo en Cloudflare:
+  - `MX @ → smtp.google.com` (prioridad 1)
+  - `TXT @ → v=spf1 include:_spf.google.com ~all`
+  - `TXT @ → google-site-verification=...` (no borrar)
+- `confirmaciones@amarecr.com` solo sirve para disparar el correo al cliente: debe existir como **alias** de facturas@ en
+  Workspace, con un filtro de Gmail que elimine lo que llegue a esa dirección.
+- Pendiente recomendado: activar **DKIM** en Admin de Workspace (Apps → Gmail → Autenticar correo) y agregar el TXT que dé Google.
 
 ---
 
