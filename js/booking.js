@@ -4,7 +4,8 @@
      1. Se envían dos correos (vía FormSubmit):
         - Al negocio (facturas@amarecr.com): pedido completo + "datos_json"
           para la automatización en Python → Google Calendar.
-        - Al cliente: saludo personalizado + tabla del pedido + gracias final.
+        - Al cliente: correo con diseño vía EmailJS (plantilla en
+          emails/confirmacion-cliente.html); respaldo de texto por FormSubmit.
      2. Se abre WhatsApp con el resumen para que el equipo confirme el espacio.
    Datos de servicios y precios: js/services-data.js */
 (function () {
@@ -18,6 +19,15 @@
   //                   Cloudflare descarta la copia que llega a esta dirección.
   var ENDPOINT_NEGOCIO = 'https://formsubmit.co/ajax/facturas@amarecr.com';
   var ENDPOINT_CLIENTE = 'https://formsubmit.co/ajax/confirmaciones@amarecr.com';
+
+  // EmailJS: correo con diseño al cliente (plantilla emails/confirmacion-cliente.html).
+  // Plan gratis: 200 envíos/mes → solo se usa para el cliente. Si falta algún dato,
+  // el sitio vuelve a usar el correo de texto de FormSubmit (ENDPOINT_CLIENTE).
+  var EMAILJS = {
+    serviceId: '',   // Email Services → Service ID
+    templateId: '',  // Email Templates → Template ID
+    publicKey: '',   // Account → General → Public Key
+  };
 
   var state = {
     service: null,
@@ -463,6 +473,48 @@
     );
   }
 
+  function emailjsListo() {
+    return !!(EMAILJS.serviceId && EMAILJS.templateId && EMAILJS.publicKey);
+  }
+
+  // Variables que usa la plantilla de EmailJS ({{nombre}}, {{servicio}}, ...).
+  function paramsEmailJS() {
+    var f = filasPedido();
+    var c = state.cliente;
+    return {
+      correo: c.correo,
+      nombre: c.nombre.split(' ')[0],
+      nombre_completo: c.nombre,
+      celular: c.celular,
+      servicio: f['Servicio'],
+      categoria: f['Categoría'],
+      largo: f['Largo de cabello'],
+      precio: f['Precio estimado'],
+      duracion: f['Duración estimada'],
+      fecha: fechaLegible(state.fecha),
+      franja: f['Momento del día'],
+      deposito: f['Depósito'],
+      comentarios: f['Comentarios'],
+    };
+  }
+
+  function enviarEmailJS() {
+    return fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        service_id: EMAILJS.serviceId,
+        template_id: EMAILJS.templateId,
+        user_id: EMAILJS.publicKey,
+        template_params: paramsEmailJS(),
+      }),
+      keepalive: true,
+    }).then(function (r) {
+      if (!r.ok) throw new Error('EmailJS HTTP ' + r.status);
+      return r.text();
+    });
+  }
+
   function enviarCorreo(endpoint, payload) {
     return fetch(endpoint, {
       method: 'POST',
@@ -497,9 +549,17 @@
         });
     }
 
+    // Cliente: correo con diseño por EmailJS (si falla, respaldo de texto por FormSubmit).
+    var correoCliente = emailjsListo()
+      ? enviarEmailJS().catch(function (err) {
+          if (window.console) console.warn('EmailJS falló, se usa FormSubmit:', err);
+          return conReintento(ENDPOINT_CLIENTE, cliente);
+        })
+      : conReintento(ENDPOINT_CLIENTE, cliente);
+
     Promise.all([
       conReintento(ENDPOINT_NEGOCIO, negocio),
-      conReintento(ENDPOINT_CLIENTE, cliente),
+      correoCliente,
     ])
       .then(function () {
         els.doneTitle.textContent = '¡Gracias, ' + state.cliente.nombre.split(' ')[0] + '! Recibimos tu solicitud';
