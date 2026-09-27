@@ -5,7 +5,7 @@
         adjunta el comprobante (JPG/PNG) antes de confirmar.
      1. Se envían dos correos:
         - Al negocio (facturas@amarecr.com, FormSubmit): pedido completo +
-          comprobante adjunto + enlaces de WhatsApp para confirmar o rechazar
+          comprobante adjunto
           + "datos_json" para la automatización en Python → Google Calendar.
         - Al cliente: correo con diseño vía EmailJS (plantilla en
           emails/confirmacion-cliente.html); respaldo de texto por FormSubmit.
@@ -22,6 +22,7 @@
   // confirmaciones@ → solo dispara el correo de agradecimiento al cliente;
   //                   Cloudflare descarta la copia que llega a esta dirección.
   var ENDPOINT_NEGOCIO = 'https://formsubmit.co/ajax/facturas@amarecr.com';
+  var ENDPOINT_NEGOCIO_ADJUNTOS = 'https://formsubmit.co/facturas@amarecr.com'; // admite comprobante adjunto
   var ENDPOINT_CLIENTE = 'https://formsubmit.co/ajax/confirmaciones@amarecr.com';
 
   // EmailJS: correo con diseño al cliente (plantilla emails/confirmacion-cliente.html).
@@ -599,30 +600,6 @@
     return target;
   }
 
-  // Enlaces de WhatsApp para que el admin responda al cliente con un toque.
-  function whatsappCliente(texto) {
-    var tel = state.cliente.celular.replace(/\D/g, '');
-    return 'https://wa.me/' + tel + '?text=' + encodeURIComponent(texto);
-  }
-
-  function accionesAdmin() {
-    var c = state.cliente;
-    var s = state.service;
-    var nombre = c.nombre.split(' ')[0];
-    var cuando = fechaLegible(state.fecha) + ' (' + state.franja.toLowerCase() + ')';
-    var deposito = currentDeposito();
-    var confirmar = 'Hola ' + nombre + ', te escribimos de Amarë Beauty Center. ' +
-      (deposito.requerido ? 'Validamos tu depósito de ' + money(deposito.monto) + ' y ' : '') +
-      'tu cita de ' + s.servicio + ' queda confirmada para el ' + cuando + ' a las __:__. ¡Te esperamos!';
-    var rechazar = 'Hola ' + nombre + ', te escribimos de Amarë Beauty Center. No pudimos validar el comprobante de tu reserva de ' +
-      s.servicio + ' para el ' + cuando + '. Motivo: ________. Por esta razón liberamos el espacio. ' +
-      'Si fue un error, responde este mensaje con el comprobante correcto y con gusto te ayudamos a reagendar.';
-    return {
-      'Admin · Confirmar cita (WhatsApp)': whatsappCliente(confirmar),
-      'Admin · Rechazar y liberar espacio (WhatsApp)': whatsappCliente(rechazar),
-    };
-  }
-
   // Correo 1 → negocio (facturas@): pedido + comprobante adjunto + datos_json para la automatización.
   function payloadNegocio() {
     var s = state.service;
@@ -641,27 +618,19 @@
       filasPedido(),
       deposito.requerido ? { 'Descripción esperada del SINPE': conceptoPago() } : {},
       { 'Correo': c.correo },
-      accionesAdmin(),
       { 'datos_json': JSON.stringify(datosAutomatizacion()) }
     );
   }
 
-  // FormSubmit recibe el comprobante como archivo adjunto (multipart).
+  // FormSubmit solo conserva archivos en su endpoint normal (no en /ajax/), y el
+  // campo debe llamarse "attachment". La respuesta es una redirección sin CORS,
+  // así que se envía en modo no-cors: si la red falla, fetch lanza error.
   function enviarNegocio(payload) {
     var fd = new FormData();
     Object.keys(payload).forEach(function (k) { fd.append(k, payload[k]); });
-    if (state.comprobante) fd.append('Comprobante de pago', state.comprobante, state.comprobante.name);
-    return fetch(ENDPOINT_NEGOCIO, {
-      method: 'POST',
-      headers: { 'Accept': 'application/json' },
-      body: fd,
-    }).then(function (r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    }).then(function (j) {
-      if (String(j.success) !== 'true') throw new Error(j.message || 'FormSubmit rechazó el envío');
-      return j;
-    });
+    fd.append('_next', 'https://amarecr.com/reservar.html');
+    if (state.comprobante) fd.append('attachment', state.comprobante, state.comprobante.name);
+    return fetch(ENDPOINT_NEGOCIO_ADJUNTOS, { method: 'POST', mode: 'no-cors', body: fd });
   }
 
   // Correo 2 → cliente: FormSubmit le envía el saludo (_autoresponse) + la tabla del pedido.
