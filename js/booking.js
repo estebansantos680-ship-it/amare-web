@@ -24,9 +24,9 @@
   // Plan gratis: 200 envíos/mes → solo se usa para el cliente. Si falta algún dato,
   // el sitio vuelve a usar el correo de texto de FormSubmit (ENDPOINT_CLIENTE).
   var EMAILJS = {
-    serviceId: '',   // Email Services → Service ID
-    templateId: '',  // Email Templates → Template ID
-    publicKey: '',   // Account → General → Public Key
+    serviceId: 'service_q9qzz65',   // Email Services → Service ID
+    templateId: 'template_nrvafoo', // Email Templates → Template ID
+    publicKey: 'Yrbk48Pzaxg_eptQn', // Account → General → Public Key
   };
 
   var state = {
