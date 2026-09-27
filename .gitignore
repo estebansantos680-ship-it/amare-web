@@ -19,3 +19,6 @@ desktop.ini
 
 # Respaldo de DNS (se guarda solo en local)
 dns-github-pages.txt
+
+# Vista previa local del correo
+emails/vista-previa.html
