@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Reservar cita (simulador) | Amarë Beauty Center</title>
-<meta name="description" content="Simulador de reserva de citas de Amarë: elige tu servicio, revisa el depósito estimado y envía tu solicitud por WhatsApp.">
+<title>Reservar cita | Amarë Beauty Center</title>
+<meta name="description" content="Reserva tu cita en Amarë Beauty Center: elige tu servicio, el largo de tu cabello y el día que prefieras. Te confirmamos por WhatsApp.">
 <meta name="theme-color" content="#0B0B0B">
 <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -56,9 +56,9 @@
     <section class="page-hero">
       <div class="page-hero-bg" aria-hidden="true"><img src="assets/images/tenaza-ondas-1800x900.webp" alt=""></div>
       <div class="wrap">
-        <p class="eyebrow">Vista previa</p>
-        <h1>Simulador de reserva de cita</h1>
-        <p>Esta es una demostración de cómo funcionará el sistema de citas de Amarë: elige tu servicio, revisa el depósito estimado y la disponibilidad. <strong>Todavía no agenda una cita real</strong> — el último paso te conecta por WhatsApp con nuestro equipo para confirmarla, igual que hoy.</p>
+        <p class="eyebrow">Reserva en línea</p>
+        <h1>Reserva tu momento Amarë</h1>
+        <p>Elige tu servicio, el largo de tu cabello y el día que prefieras. En menos de un minuto tu solicitud llega a nuestro equipo y te confirmamos tu espacio por WhatsApp.</p>
       </div>
     </section>
 
@@ -68,8 +68,9 @@
           <div class="booking-steps" id="bookingSteps">
             <span class="step active" data-step="1">1. Servicio</span>
             <span class="step" data-step="2">2. Largo de cabello</span>
-            <span class="step" data-step="3">3. Fecha y franja</span>
-            <span class="step" data-step="4">4. Resumen</span>
+            <span class="step" data-step="3">3. Fecha</span>
+            <span class="step" data-step="4">4. Tus datos</span>
+            <span class="step" data-step="5">5. Confirmar</span>
           </div>
 
           <form id="bookingForm">
@@ -111,9 +112,9 @@
             <div class="booking-panel" data-panel="3" hidden>
               <label for="inpFecha">Fecha</label>
               <input type="date" id="inpFecha">
-              <p class="service-note">Atendemos de martes a sábado, 9:00 a.m. a 6:00 p.m. Domingo y lunes cerrado.</p>
+              <p class="service-note">Atendemos de lunes a sábado, 9:00 a.m. a 6:00 p.m.</p>
 
-              <label>Franja</label>
+              <label>¿Qué momento del día prefieres?</label>
               <div class="franja-grid">
                 <button type="button" class="franja-option" data-franja="Mañana">Mañana</button>
                 <button type="button" class="franja-option" data-franja="Tarde">Tarde</button>
@@ -128,6 +129,28 @@
             </div>
 
             <div class="booking-panel" data-panel="4" hidden>
+              <p class="booking-lead">¿A nombre de quién reservamos? Usamos estos datos solo para confirmar y recordarte tu cita.</p>
+              <label for="inpNombre">Nombre completo</label>
+              <input type="text" id="inpNombre" autocomplete="name" placeholder="Ej. María Fernández" required>
+
+              <label for="inpCelular">Celular (WhatsApp)</label>
+              <input type="tel" id="inpCelular" autocomplete="tel" inputmode="tel" placeholder="Ej. 8888-8888" required>
+
+              <label for="inpCorreo">Correo electrónico</label>
+              <input type="email" id="inpCorreo" autocomplete="email" placeholder="Ej. maria@correo.com" required>
+
+              <label for="inpNotas">Comentarios <span class="optional">(opcional)</span></label>
+              <textarea id="inpNotas" rows="3" placeholder="Cuéntanos si tienes alguna alergia, un tono en mente o algo que debamos saber."></textarea>
+
+              <p class="field-error" id="datosError" hidden></p>
+
+              <div class="booking-nav">
+                <button type="button" class="btn btn-outline" data-prev="3">Atrás</button>
+                <button type="button" class="btn btn-solid" id="toStep5">Continuar</button>
+              </div>
+            </div>
+
+            <div class="booking-panel" data-panel="5" hidden>
               <div class="booking-summary" id="bookingSummary"></div>
 
               <label class="policy-check">
@@ -135,15 +158,37 @@
                 Entiendo que el depósito se descuenta del total del servicio y que las cancelaciones con menos de 72 horas de anticipación no tienen reembolso.
               </label>
 
+              <p class="field-error" id="envioError" hidden></p>
+
               <div class="booking-nav">
-                <button type="button" class="btn btn-outline" data-prev="3">Atrás</button>
-                <a href="#" id="whatsappSubmit" class="btn btn-solid disabled-link" target="_blank" rel="noopener noreferrer">Enviar solicitud por WhatsApp</a>
+                <button type="button" class="btn btn-outline" data-prev="4">Atrás</button>
+                <button type="button" id="btnConfirmar" class="btn btn-solid" disabled>Confirmar reserva</button>
+              </div>
+            </div>
+
+            <div class="booking-panel booking-done" data-panel="6" hidden>
+              <span class="done-mark" aria-hidden="true">✦</span>
+              <h2 id="doneTitle">¡Solicitud recibida!</h2>
+              <p>Tu solicitud ya está con nuestro equipo. Te abrimos WhatsApp con el resumen para confirmar tu espacio y los detalles del depósito.</p>
+              <p class="service-note">¿No se abrió WhatsApp? Usa el botón de abajo.</p>
+              <div class="booking-nav center">
+                <a href="#" id="doneWhatsapp" class="btn btn-solid" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a>
+                <a href="index.html" class="btn btn-outline">Volver al inicio</a>
               </div>
             </div>
           </form>
         </div>
 
-        <p class="booking-disclaimer">* Simulación con fines de demostración. La disponibilidad por franja se genera automáticamente para esta vista previa y no refleja la agenda real del salón todavía. Montos de depósito, datos SINPE y reglas de compatibilidad entre servicios están pendientes de confirmación final con el equipo de Amarë.</p>
+        <div class="booking-help">
+          <div>
+            <span class="eyebrow">¿Tienes dudas?</span>
+            <p>Te ayudamos a elegir el servicio ideal para tu cabello antes de reservar.</p>
+          </div>
+          <div class="booking-help-actions">
+            <a class="btn-pill" href="https://api.whatsapp.com/send?phone=50688073849&amp;text=Hola%20Amar%C3%AB!%20Tengo%20una%20consulta%20antes%20de%20reservar." target="_blank" rel="noopener noreferrer">Escríbenos por WhatsApp</a>
+            <a class="btn-pill" href="tel:+50688073849">Llamar +506 8807-3849</a>
+          </div>
+        </div>
       </div>
     </section>
 

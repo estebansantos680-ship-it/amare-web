@@ -1,17 +1,19 @@
-/* AMARË — Simulador de reserva de cita (reservar.html)
-   No hay backend: todo corre en el navegador con los datos reales de
-   js/services-data.js. La disponibilidad por franja es una simulación
-   determinística (no lee ninguna agenda real) y el paso final abre
-   WhatsApp con el resumen, que es como hoy se confirman las citas de
-   verdad. Ver nota de "Peso operativo" en services-data.js: la regla
-   de cupo liviano/pesado es una aproximación pendiente de validar con
-   el cliente (ver Pendientes P-011/P-013 del blueprint de la app). */
+/* AMARË — Reserva de cita en línea (reservar.html)
+   Flujo: servicio → largo → fecha/franja → datos del cliente → confirmar.
+   Al confirmar:
+     1. Se envía un correo automático con el pedido a facturas@amarecr.com
+        (vía FormSubmit). Incluye un campo "datos_json" pensado para que la
+        automatización de Google Calendar lo lea sin tener que interpretar texto.
+     2. Se abre WhatsApp con el resumen para que el equipo confirme el espacio.
+   Datos de servicios y precios: js/services-data.js */
 (function () {
   'use strict';
 
   var SERVICES = window.AMARE_SERVICES || [];
-  var CAPACIDAD_POR_FRANJA = 4; // respuesta real de Julio en Pendientes P-011
   var WHATSAPP_NUMBER = '50688073849';
+  // Correo que recibe cada solicitud. FormSubmit pide activarlo una sola vez
+  // (llega un correo de "Activate form" a esta dirección).
+  var FORM_ENDPOINT = 'https://formsubmit.co/ajax/facturas@amarecr.com';
 
   var state = {
     service: null,
@@ -19,7 +21,7 @@
     tier: null,
     fecha: null,
     franja: null,
-    disponibilidad: null,
+    cliente: null,
   };
 
   /* ---------- Helpers ---------- */
@@ -57,34 +59,16 @@
     return { requerido: true, monto: 25000 };
   }
 
-  function hashSeed(str) {
-    var h = 0;
-    for (var i = 0; i < str.length; i++) {
-      h = (h * 31 + str.charCodeAt(i)) >>> 0;
-    }
-    return h;
+  function fechaLegible(iso) {
+    var d = new Date(iso + 'T12:00:00');
+    var txt = d.toLocaleDateString('es-CR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    return txt.charAt(0).toUpperCase() + txt.slice(1);
   }
 
-  function evaluarDisponibilidad(fecha, franja, service) {
-    var ocupados = hashSeed(fecha + '|' + franja) % (CAPACIDAD_POR_FRANJA + 1);
-    var libres = CAPACIDAD_POR_FRANJA - ocupados;
-    var franjaTexto = franja.toLowerCase();
-    if (libres > 0) {
-      return {
-        estado: 'ok', ocupados: ocupados, libres: libres,
-        mensaje: 'Hay ' + libres + ' de ' + CAPACIDAD_POR_FRANJA + ' cupos disponibles en la franja de ' + franjaTexto + '.',
-      };
-    }
-    if (service.pesoLiviano) {
-      return {
-        estado: 'review', ocupados: ocupados, libres: 0,
-        mensaje: 'La franja de ' + franjaTexto + ' está al cupo completo (' + CAPACIDAD_POR_FRANJA + '/' + CAPACIDAD_POR_FRANJA + '), pero por ser un servicio liviano nuestro equipo podría abrir un espacio adicional. Lo confirmamos por WhatsApp.',
-      };
-    }
-    return {
-      estado: 'full', ocupados: ocupados, libres: 0,
-      mensaje: 'La franja de ' + franjaTexto + ' está al cupo completo (' + CAPACIDAD_POR_FRANJA + '/' + CAPACIDAD_POR_FRANJA + '). Tu solicitud quedará pendiente de aprobación mientras buscamos un espacio.',
-    };
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
   }
 
   /* ---------- Elements ---------- */
@@ -102,9 +86,19 @@
     franjaButtons: document.querySelectorAll('.franja-option'),
     availabilityResult: document.getElementById('availabilityResult'),
     toStep4: document.getElementById('toStep4'),
+    inpNombre: document.getElementById('inpNombre'),
+    inpCelular: document.getElementById('inpCelular'),
+    inpCorreo: document.getElementById('inpCorreo'),
+    inpNotas: document.getElementById('inpNotas'),
+    datosError: document.getElementById('datosError'),
+    toStep5: document.getElementById('toStep5'),
     bookingSummary: document.getElementById('bookingSummary'),
     chkPolicy: document.getElementById('chkPolicy'),
-    whatsappSubmit: document.getElementById('whatsappSubmit'),
+    envioError: document.getElementById('envioError'),
+    btnConfirmar: document.getElementById('btnConfirmar'),
+    doneTitle: document.getElementById('doneTitle'),
+    doneWhatsapp: document.getElementById('doneWhatsapp'),
+    box: document.getElementById('bookingBox'),
   };
 
   if (!els.bookingSummary) return; // esta página no está cargada
@@ -121,6 +115,9 @@
       s.classList.toggle('active', step === n);
       s.classList.toggle('done', step < n);
     });
+    // En celular, llevar la vista al inicio del formulario
+    var top = els.box.getBoundingClientRect().top;
+    if (top < 0) els.box.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   document.querySelectorAll('[data-prev]').forEach(function (btn) {
@@ -182,19 +179,10 @@
     state.tier = null;
     els.toStep3.disabled = true;
 
-    // Si el cliente vuelve atrás y cambia de servicio, la fecha/franja
-    // elegidas antes ya no aplican (la disponibilidad depende del servicio).
-    state.fecha = null;
-    state.franja = null;
-    state.disponibilidad = null;
-    els.inpFecha.value = '';
-    els.franjaButtons.forEach(function (b) { b.classList.remove('selected'); });
-    els.availabilityResult.hidden = true;
-    els.toStep4.disabled = true;
-
     Object.keys(s.tiers).forEach(function (label) {
       var tier = s.tiers[label];
-      var div = document.createElement('div');
+      var div = document.createElement('button');
+      div.type = 'button';
       div.className = 'length-option';
       div.setAttribute('data-length', label);
       div.innerHTML =
@@ -229,19 +217,18 @@
 
   function resetFranjaSelection() {
     state.franja = null;
-    state.disponibilidad = null;
     els.franjaButtons.forEach(function (b) { b.classList.remove('selected'); });
     els.availabilityResult.hidden = true;
     els.toStep4.disabled = true;
   }
 
-  function checkAvailability() {
+  function showFranjaMessage() {
     if (!state.fecha || !state.franja) return;
-    var disponibilidad = evaluarDisponibilidad(state.fecha, state.franja, state.service);
-    state.disponibilidad = disponibilidad;
     els.availabilityResult.hidden = false;
-    els.availabilityResult.className = 'availability-result ' + disponibilidad.estado;
-    els.availabilityResult.textContent = disponibilidad.mensaje;
+    els.availabilityResult.className = 'availability-result ok';
+    els.availabilityResult.textContent =
+      '¡Excelente elección! Solicitaremos tu espacio para el ' + fechaLegible(state.fecha).toLowerCase() +
+      ' en la ' + state.franja.toLowerCase() + '. Nuestro equipo te confirma la hora exacta por WhatsApp.';
     els.toStep4.disabled = false;
   }
 
@@ -249,12 +236,11 @@
     resetFranjaSelection();
     if (!els.inpFecha.value) return;
     var d = new Date(els.inpFecha.value + 'T12:00:00');
-    var day = d.getDay(); // 0 = domingo, 1 = lunes
-    if (day === 0 || day === 1) {
+    if (d.getDay() === 0) {
       state.fecha = null;
       els.availabilityResult.hidden = false;
       els.availabilityResult.className = 'availability-result full';
-      els.availabilityResult.textContent = 'Cerrado ese día. Atendemos de martes a sábado.';
+      els.availabilityResult.textContent = 'Los domingos descansamos. Elige un día de lunes a sábado.';
       return;
     }
     state.fecha = els.inpFecha.value;
@@ -262,70 +248,209 @@
 
   els.franjaButtons.forEach(function (btn) {
     btn.addEventListener('click', function () {
-      if (!state.fecha) return;
+      if (!state.fecha) {
+        els.availabilityResult.hidden = false;
+        els.availabilityResult.className = 'availability-result review';
+        els.availabilityResult.textContent = 'Primero elige la fecha de tu cita.';
+        return;
+      }
       els.franjaButtons.forEach(function (b) { b.classList.remove('selected'); });
       btn.classList.add('selected');
       state.franja = btn.getAttribute('data-franja');
-      checkAvailability();
+      showFranjaMessage();
     });
   });
 
   els.toStep4.addEventListener('click', function () {
-    renderStep4();
     goToStep(4);
+    els.inpNombre.focus({ preventScroll: true });
   });
 
-  /* ---------- Paso 4: resumen + envío por WhatsApp ---------- */
-  function renderStep4() {
+  /* ---------- Paso 4: datos del cliente ---------- */
+  function limpiarCelular(v) {
+    return String(v || '').replace(/[^\d+]/g, '');
+  }
+
+  function validarDatos() {
+    var nombre = els.inpNombre.value.trim();
+    var celular = limpiarCelular(els.inpCelular.value);
+    var digitos = celular.replace(/\D/g, '');
+    var correo = els.inpCorreo.value.trim();
+    var errores = [];
+
+    [els.inpNombre, els.inpCelular, els.inpCorreo].forEach(function (i) { i.classList.remove('invalid'); });
+
+    if (nombre.length < 3) { errores.push('tu nombre completo'); els.inpNombre.classList.add('invalid'); }
+    if (digitos.length < 8 || digitos.length > 15) { errores.push('un número de celular válido'); els.inpCelular.classList.add('invalid'); }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(correo)) { errores.push('un correo válido'); els.inpCorreo.classList.add('invalid'); }
+
+    if (errores.length) {
+      els.datosError.hidden = false;
+      els.datosError.textContent = 'Por favor ingresa ' + errores.join(', ') + '.';
+      return null;
+    }
+    els.datosError.hidden = true;
+    // Números de 8 dígitos se asumen de Costa Rica
+    var celularCompleto = digitos.length === 8 ? '+506 ' + digitos.slice(0, 4) + '-' + digitos.slice(4) : celular;
+    return {
+      nombre: nombre,
+      celular: celularCompleto,
+      correo: correo,
+      notas: els.inpNotas.value.trim(),
+    };
+  }
+
+  els.toStep5.addEventListener('click', function () {
+    var cliente = validarDatos();
+    if (!cliente) return;
+    state.cliente = cliente;
+    renderStep5();
+    goToStep(5);
+  });
+
+  /* ---------- Paso 5: resumen + confirmación ---------- */
+  function currentDeposito() {
+    return calcDeposito(state.tier.max, state.service.deposito);
+  }
+
+  function renderStep5() {
     var s = state.service;
     var tier = state.tier;
-    var deposito = calcDeposito(tier.max, s.deposito);
+    var c = state.cliente;
+    var deposito = currentDeposito();
 
     var rows = [
       ['Servicio', s.servicio + ' (' + s.categoria + ')'],
       ['Largo de cabello', state.lengthLabel],
       ['Precio estimado', priceRangeLabel(tier)],
       ['Duración estimada', durationLabel(tier) || 'Por confirmar'],
-      ['Fecha solicitada', state.fecha],
-      ['Franja', state.franja],
-      ['Disponibilidad simulada', state.disponibilidad ? state.disponibilidad.mensaje : ''],
+      ['Fecha', fechaLegible(state.fecha)],
+      ['Momento del día', state.franja],
+      ['Nombre', c.nombre],
+      ['Celular', c.celular],
+      ['Correo', c.correo],
     ];
+    if (c.notas) rows.push(['Comentarios', c.notas]);
 
     var html = '<dl>';
     rows.forEach(function (r) {
-      html += '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>';
+      html += '<dt>' + r[0] + '</dt><dd>' + escapeHtml(r[1]) + '</dd>';
     });
     html += '<dt>Depósito</dt><dd class="deposit-highlight">' +
       (deposito.requerido ? money(deposito.monto) + ' (se descuenta del total)' : 'No requiere depósito') +
       '</dd>';
     html += '</dl>';
     els.bookingSummary.innerHTML = html;
-
-    updateWhatsappLink(deposito);
-  }
-
-  function updateWhatsappLink(deposito) {
-    var s = state.service;
-    var tier = state.tier;
-    var enabled = els.chkPolicy.checked;
-    els.whatsappSubmit.classList.toggle('disabled-link', !enabled);
-
-    var lines = [
-      'Hola AMARË! Quiero solicitar una cita (vista previa desde la web):',
-      '- Servicio: ' + s.servicio + ' (' + s.categoria + ')',
-      '- Largo: ' + state.lengthLabel + ' — ' + priceRangeLabel(tier),
-      '- Fecha: ' + state.fecha + ' — Franja: ' + state.franja,
-      '- Depósito estimado: ' + (deposito.requerido ? money(deposito.monto) : 'no requiere'),
-    ];
-    var text = encodeURIComponent(lines.join('\n'));
-    els.whatsappSubmit.href = 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + text;
+    els.envioError.hidden = true;
+    els.btnConfirmar.disabled = !els.chkPolicy.checked;
   }
 
   els.chkPolicy.addEventListener('change', function () {
-    if (state.service && state.tier) {
-      var deposito = calcDeposito(state.tier.max, state.service.deposito);
-      updateWhatsappLink(deposito);
-    }
+    els.btnConfirmar.disabled = !els.chkPolicy.checked;
+  });
+
+  function whatsappUrl() {
+    var s = state.service;
+    var c = state.cliente;
+    var deposito = currentDeposito();
+    var lines = [
+      '¡Hola Amarë! Quiero reservar una cita:',
+      '• Nombre: ' + c.nombre,
+      '• Servicio: ' + s.servicio + ' (' + s.categoria + ')',
+      '• Largo: ' + state.lengthLabel + ' — ' + priceRangeLabel(state.tier),
+      '• Fecha: ' + fechaLegible(state.fecha) + ' — ' + state.franja,
+      '• Depósito: ' + (deposito.requerido ? money(deposito.monto) : 'no requiere'),
+    ];
+    if (c.notas) lines.push('• Comentarios: ' + c.notas);
+    return 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(lines.join('\n'));
+  }
+
+  function emailPayload() {
+    var s = state.service;
+    var c = state.cliente;
+    var tier = state.tier;
+    var deposito = currentDeposito();
+    var enviado = new Date();
+
+    var datos = {
+      version: 1,
+      origen: 'amarecr.com/reservar',
+      enviado: enviado.toISOString(),
+      cliente: { nombre: c.nombre, celular: c.celular, correo: c.correo },
+      servicio: {
+        codigo: s.codigo || '',
+        nombre: s.servicio,
+        categoria: s.categoria,
+        largo: state.lengthLabel,
+        precio_min: tier.min,
+        precio_max: tier.max,
+        duracion_min_h: tier.durMin,
+        duracion_max_h: tier.durMax,
+      },
+      cita: { fecha: state.fecha, franja: state.franja, horario_sugerido: s.horario || '' },
+      deposito: { requerido: deposito.requerido, monto: deposito.monto },
+      comentarios: c.notas || '',
+    };
+
+    return {
+      _subject: 'Nueva cita: ' + s.servicio + ' · ' + state.fecha + ' ' + state.franja + ' · ' + c.nombre,
+      _template: 'table',
+      _captcha: 'false',
+      _replyto: c.correo,
+      _honey: '',
+      'Nombre': c.nombre,
+      'Celular': c.celular,
+      'Correo': c.correo,
+      'Servicio': s.servicio,
+      'Categoría': s.categoria,
+      'Código de servicio': s.codigo || '',
+      'Largo de cabello': state.lengthLabel,
+      'Precio estimado': priceRangeLabel(tier),
+      'Duración estimada': durationLabel(tier) || 'Por confirmar',
+      'Fecha': fechaLegible(state.fecha) + ' (' + state.fecha + ')',
+      'Momento del día': state.franja,
+      'Depósito': deposito.requerido ? money(deposito.monto) : 'No requiere',
+      'Comentarios': c.notas || '—',
+      'Enviado': enviado.toLocaleString('es-CR'),
+      'datos_json': JSON.stringify(datos),
+    };
+  }
+
+  function enviarCorreo(payload) {
+    return fetch(FORM_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+  }
+
+  els.btnConfirmar.addEventListener('click', function () {
+    if (!els.chkPolicy.checked || !state.cliente) return;
+    var wa = whatsappUrl();
+    var payload = emailPayload();
+
+    // WhatsApp se abre dentro del mismo clic para que el navegador no lo bloquee.
+    window.open(wa, '_blank', 'noopener');
+
+    els.btnConfirmar.classList.add('is-loading');
+    els.btnConfirmar.textContent = 'Enviando…';
+
+    // Un reintento por si la conexión del celular falla en el primer intento.
+    enviarCorreo(payload)
+      .catch(function () { return enviarCorreo(payload); })
+      .catch(function (err) {
+        // Aunque falle el correo, la solicitud ya salió por WhatsApp.
+        if (window.console) console.warn('No se pudo enviar el correo de la reserva:', err);
+      })
+      .then(function () {
+        els.doneTitle.textContent = '¡Gracias, ' + state.cliente.nombre.split(' ')[0] + '! Recibimos tu solicitud';
+        els.doneWhatsapp.href = wa;
+        goToStep(6);
+      });
   });
 
 })();
