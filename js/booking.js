@@ -365,6 +365,42 @@
     return 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(lines.join('\n'));
   }
 
+  // Correo de agradecimiento que recibe el cliente (texto plano).
+  function mensajeCliente() {
+    var s = state.service;
+    var c = state.cliente;
+    var deposito = currentDeposito();
+    var lines = [
+      'AMARË Beauty Center',
+      '',
+      '¡Hola ' + c.nombre.split(' ')[0] + '!',
+      '',
+      'Gracias por elegirnos. Estamos muy contentos de atenderte y ya recibimos tu solicitud de cita.',
+      'En breve te escribimos por WhatsApp al ' + c.celular + ' para confirmar la hora exacta' +
+        (deposito.requerido ? ' y los detalles del depósito.' : '.'),
+      '',
+      'RESUMEN DE TU SOLICITUD',
+      '• Servicio: ' + s.servicio + ' (' + s.categoria + ')',
+      '• Largo de cabello: ' + state.lengthLabel,
+      '• Precio estimado: ' + priceRangeLabel(state.tier),
+      '• Duración estimada: ' + (durationLabel(state.tier) || 'Por confirmar'),
+      '• Fecha: ' + fechaLegible(state.fecha) + ' — ' + state.franja,
+      '• Depósito: ' + (deposito.requerido ? money(deposito.monto) + ' (se descuenta del total)' : 'No requiere'),
+    ];
+    if (c.notas) lines.push('• Tus comentarios: ' + c.notas);
+    lines.push(
+      '',
+      'Recuerda: las cancelaciones con menos de 72 horas de anticipación no tienen reembolso del depósito.',
+      '',
+      '¿Dudas? Escríbenos por WhatsApp al +506 8807-3849.',
+      'Calle 42, San José, Costa Rica · Lunes a sábado, 9:00 a.m. – 6:00 p.m.',
+      '',
+      'La belleza no comienza en el espejo, sino en cómo nos sentimos.',
+      'Equipo Amarë · https://amarecr.com'
+    );
+    return lines.join('\n');
+  }
+
   function emailPayload() {
     var s = state.service;
     var c = state.cliente;
@@ -400,7 +436,9 @@
       _honey: '',
       'Nombre': c.nombre,
       'Celular': c.celular,
-      'Correo': c.correo,
+      // FormSubmit envía la respuesta automática (_autoresponse) al campo llamado "email".
+      'email': c.correo,
+      _autoresponse: mensajeCliente(),
       'Servicio': s.servicio,
       'Categoría': s.categoria,
       'Código de servicio': s.codigo || '',
