@@ -2,7 +2,7 @@
    Flujo: servicio → largo → fecha/franja → datos del cliente → confirmar.
    Al confirmar:
      0. Si el servicio requiere depósito, el cliente hace SINPE/transferencia y
-        adjunta el comprobante (JPG/PNG) antes de confirmar.
+        adjunta el comprobante (JPG/PNG/PDF, obligatorio) antes de confirmar.
      1. Se envían dos correos:
         - Al negocio (facturas@amarecr.com, FormSubmit): pedido completo +
           comprobante adjunto
@@ -41,7 +41,7 @@
     fecha: null,
     franja: null,
     cliente: null,
-    comprobante: null, // File (JPG/PNG) del SINPE/transferencia
+    comprobante: null, // File (JPG/PNG/PDF) del SINPE/transferencia
   };
 
   /* ---------- Helpers ---------- */
@@ -449,7 +449,7 @@
   });
   els.copiarConcepto.addEventListener('click', function () { copiar(els.pagoConcepto.textContent, els.copiarConcepto); });
 
-  /* ---------- Comprobante de pago (JPG / PNG) ---------- */
+  /* ---------- Comprobante de pago (JPG / PNG / PDF) ---------- */
   var MAX_MB = 8;
 
   function tamLegible(bytes) {
@@ -459,7 +459,7 @@
   // Fotos grandes del celular se reducen a 1600 px para que el correo llegue rápido.
   function optimizarImagen(file) {
     return new Promise(function (resolve) {
-      if (file.size < 1200 * 1024 || !window.createImageBitmap) return resolve(file);
+      if (file.type === 'application/pdf' || file.size < 1200 * 1024 || !window.createImageBitmap) return resolve(file);
       createImageBitmap(file).then(function (bmp) {
         var escala = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
         var canvas = document.createElement('canvas');
@@ -482,18 +482,21 @@
 
   function cargarComprobante(file) {
     if (!file) return;
-    if (!/^image\/(jpeg|png)$/.test(file.type)) {
-      mostrarErrorPago('El comprobante debe ser una imagen JPG o PNG.');
+    if (!/^(image\/(jpeg|png)|application\/pdf)$/.test(file.type)) {
+      mostrarErrorPago('El comprobante debe ser una imagen JPG o PNG, o un PDF.');
       return;
     }
     if (file.size > MAX_MB * 1048576) {
-      mostrarErrorPago('La imagen pesa más de ' + MAX_MB + ' MB. Envía una captura de pantalla del comprobante.');
+      mostrarErrorPago('El archivo pesa más de ' + MAX_MB + ' MB. Envía una captura de pantalla del comprobante.');
       return;
     }
     mostrarErrorPago('');
     optimizarImagen(file).then(function (final) {
       state.comprobante = final;
-      els.comprobanteThumb.src = URL.createObjectURL(final);
+      var esPdf = final.type === 'application/pdf';
+      els.comprobanteThumb.hidden = esPdf;
+      if (!esPdf) els.comprobanteThumb.src = URL.createObjectURL(final);
+      els.comprobantePreview.classList.toggle('es-pdf', esPdf);
       els.comprobanteNombre.textContent = file.name;
       els.comprobanteTam.textContent = tamLegible(final.size) + ' · listo para enviar';
       els.comprobantePreview.hidden = false;

@@ -755,3 +755,4 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
   .reveal{ opacity:1; transform:none; }
   html{ scroll-behavior:auto; }
 }
+.upload-preview.es-pdf::before{ content:'PDF'; display:flex; align-items:center; justify-content:center; width:64px; height:64px; background:var(--black); color:var(--cream); font-size:.72rem; font-weight:700; letter-spacing:.14em; flex-shrink:0; }
