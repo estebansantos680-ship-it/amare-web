@@ -18,4 +18,4 @@ for page in sorted(ROOT.glob("*.html")):
     new = PATTERN.sub(lambda m: f'{m.group(1)}?v={VERSION}"', html)
     if new != html:
         page.write_text(new, encoding="utf-8")
-        print("versión", VERSION, "→", page.name)
+        print("version", VERSION, "->", page.name)

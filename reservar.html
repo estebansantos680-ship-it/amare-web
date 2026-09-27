@@ -10,13 +10,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=202609262332">
+<link rel="stylesheet" href="css/style.css?v=202609271741">
 </head>
 <body>
 
   <div class="topbar">
     <div class="wrap">
-      <span class="topbar-msg">Lunes a sábado · 9:00 a.m. – 6:00 p.m. · Calle 42, San José</span>
+      <span class="topbar-msg">Martes a sábado · 9:00 a.m. – 6:00 p.m. · Calle 42, San José</span>
       <a href="tel:+50688073849" class="topbar-phone">+506 8807-3849</a>
     </div>
   </div>
@@ -103,6 +103,17 @@
               <label>Largo de cabello</label>
               <div class="length-grid" id="lengthGrid"></div>
 
+              <details class="guia-mini">
+                <summary>¿Cuál es mi largo? Ver guía</summary>
+                <figure class="guia-figura">
+                  <img src="assets/images/guia-largos.webp" alt="Guía de largos: corto hasta el hombro, mediano hasta el brasier, largo hasta la cintura y extra largo hasta la cadera" width="900" height="1350" loading="lazy">
+                  <div class="guia-marca" style="--y:48%"><span>Corto · hombro</span></div>
+                  <div class="guia-marca" style="--y:62%"><span>Mediano · brasier</span></div>
+                  <div class="guia-marca" style="--y:77%"><span>Largo · cintura</span></div>
+                  <div class="guia-marca" style="--y:91%"><span>Extra largo · cadera</span></div>
+                </figure>
+              </details>
+
               <div class="booking-nav">
                 <button type="button" class="btn btn-outline" data-prev="1">Atrás</button>
                 <button type="button" class="btn btn-solid" id="toStep3" disabled>Continuar</button>
@@ -112,7 +123,7 @@
             <div class="booking-panel" data-panel="3" hidden>
               <label for="inpFecha">Fecha</label>
               <input type="date" id="inpFecha">
-              <p class="service-note">Atendemos de lunes a sábado, 9:00 a.m. a 6:00 p.m.</p>
+              <p class="service-note">Atendemos de martes a sábado, 9:00 a.m. a 6:00 p.m. Domingo y lunes cerrado.</p>
 
               <label>¿Qué momento del día prefieres?</label>
               <div class="franja-grid">
@@ -153,6 +164,33 @@
             <div class="booking-panel" data-panel="5" hidden>
               <div class="booking-summary" id="bookingSummary"></div>
 
+              <div class="pago-box" id="pagoBox" hidden>
+                <span class="eyebrow">Depósito para confirmar tu cita</span>
+                <p class="pago-monto"><span id="pagoMonto"></span> <small>se descuenta del total del servicio</small></p>
+                <ol class="pago-pasos">
+                  <li>Haz un <strong>SINPE Móvil</strong> o una <strong>transferencia</strong> por el monto exacto:
+                    <div class="pago-dato"><span>SINPE Móvil</span><code id="pagoSinpe">8807-3849</code><button type="button" class="btn-copiar" data-copiar="88073849">Copiar</button></div>
+                    <div class="pago-dato"><span>Cuenta IBAN</span><code id="pagoIban">CR79010200009718091249</code><button type="button" class="btn-copiar" data-copiar="CR79010200009718091249">Copiar</button></div>
+                  </li>
+                  <li>En la descripción del pago escribe tu nombre, un apellido y el día de tu cita:
+                    <div class="pago-dato"><code id="pagoConcepto"></code><button type="button" class="btn-copiar" id="copiarConcepto">Copiar</button></div>
+                  </li>
+                  <li>Adjunta aquí la captura o foto del comprobante:</li>
+                </ol>
+
+                <label class="upload-zona" id="uploadZona" for="inpComprobante">
+                  <strong>Subir comprobante</strong>
+                  <span>Toca aquí o arrastra la imagen · JPG o PNG</span>
+                  <input type="file" id="inpComprobante" accept="image/jpeg,image/png">
+                </label>
+                <div class="upload-preview" id="comprobantePreview" hidden>
+                  <img id="comprobanteThumb" alt="Vista previa del comprobante">
+                  <div class="info"><span id="comprobanteNombre"></span><small id="comprobanteTam"></small></div>
+                  <button type="button" class="btn-copiar" id="quitarComprobante">Cambiar</button>
+                </div>
+                <p class="pago-nota">Tu espacio queda apartado mientras validamos el comprobante. Si el monto no coincide o no se puede verificar, liberaremos el espacio y te avisaremos el motivo por WhatsApp.</p>
+              </div>
+
               <label class="policy-check">
                 <input type="checkbox" id="chkPolicy">
                 Entiendo que el depósito se descuenta del total del servicio y que las cancelaciones con menos de 72 horas de anticipación no tienen reembolso.
@@ -169,10 +207,10 @@
             <div class="booking-panel booking-done" data-panel="6" hidden>
               <span class="done-mark" aria-hidden="true">✦</span>
               <h2 id="doneTitle">¡Solicitud recibida!</h2>
-              <p>Tu solicitud ya está con nuestro equipo y te enviamos el resumen a tu correo. Te abrimos WhatsApp para confirmar tu espacio y los detalles del depósito.</p>
-              <p class="service-note">¿No se abrió WhatsApp? Usa el botón de abajo.</p>
+              <p id="doneTexto">Tu solicitud ya está con nuestro equipo y te enviamos el resumen a tu correo.</p>
+              <p class="service-note">Toca el botón para avisarnos por WhatsApp y agilizar la confirmación.</p>
               <div class="booking-nav center">
-                <a href="#" id="doneWhatsapp" class="btn btn-solid" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a>
+                <a href="#" id="doneWhatsapp" class="btn btn-solid" target="_blank" rel="noopener noreferrer">Avisar por WhatsApp</a>
                 <a href="index.html" class="btn btn-outline">Volver al inicio</a>
               </div>
             </div>
@@ -208,7 +246,6 @@
           <h4>Contáctanos</h4>
           <p><a href="tel:+50688073849">+506 8807-3849</a></p>
           <p><a href="https://api.whatsapp.com/send?phone=50688073849&amp;text=Hola%20Amar%C3%AB!%20Me%20gustar%C3%ADa%20agendar%20una%20cita%20y%20cotizar%20sus%20servicios." target="_blank" rel="noopener noreferrer">WhatsApp</a></p>
-          <p><a href="mailto:preguntar@amare.com">preguntar@amare.com</a></p>
         </div>
         <div>
           <h4>Dirección</h4>
@@ -217,8 +254,8 @@
         </div>
         <div>
           <h4>Horarios</h4>
-          <p>Lunes a sábado<br>9:00 a.m. – 6:00 p.m.</p>
-          <p>Domingo: cerrado</p>
+          <p>Martes a sábado<br>9:00 a.m. – 6:00 p.m.</p>
+          <p>Domingo y lunes: cerrado</p>
         </div>
         <div>
           <h4>Encuéntranos</h4>
@@ -258,8 +295,8 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 20l1.3-4.2A7.7 7.7 0 1 1 9 18.6L4 20Z"/><path d="M8.5 9.7c0 3.3 2.7 6 6 6"/></svg>
   </a>
 
-  <script src="js/main.js?v=202609262332"></script>
-  <script src="js/services-data.js?v=202609262332"></script>
-  <script src="js/booking.js?v=202609262332"></script>
+  <script src="js/main.js?v=202609271741"></script>
+  <script src="js/services-data.js?v=202609271741"></script>
+  <script src="js/booking.js?v=202609271741"></script>
 </body>
 </html>

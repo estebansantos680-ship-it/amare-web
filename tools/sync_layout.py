@@ -5,6 +5,8 @@ Uso (desde la carpeta del proyecto):
 
 - El header y el footer se editan UNA sola vez en _partials/ y este script
   los copia a cada página, marcando el enlace activo del menú.
+- La guía de largos (_partials/guia-largos.html) se copia donde haya
+  <!-- GUIA-LARGOS:START --> ... <!-- GUIA-LARGOS:END -->.
 - Es seguro correrlo varias veces.
 """
 import re
@@ -13,6 +15,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 HEADER = (ROOT / "_partials" / "header.html").read_text(encoding="utf-8")
 FOOTER = (ROOT / "_partials" / "footer.html").read_text(encoding="utf-8")
+# Bloques de contenido compartidos (se insertan donde haya marcadores START/END)
+BLOQUES = {
+    "guia-largos": (ROOT / "_partials" / "guia-largos.html").read_text(encoding="utf-8"),
+}
 
 FONTS = ('<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700'
          '&family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&display=swap" rel="stylesheet">')
@@ -59,6 +65,14 @@ def sync(path: Path) -> bool:
     # Footer + botón flotante de WhatsApp
     html = re.sub(r'[ \t]*<footer id="contacto">.*?</footer>\n(\s*<a class="wa-float".*?</a>\n)?',
                   lambda m: FOOTER.rstrip() + "\n", html, count=1, flags=re.S)
+
+    # Bloques reutilizables marcados con <!-- NOMBRE:START --> ... <!-- NOMBRE:END -->
+    for nombre, contenido in BLOQUES.items():
+        marca = nombre.upper()
+        html = re.sub(
+            rf"<!-- {marca}:START -->.*?<!-- {marca}:END -->",
+            lambda m: f"<!-- {marca}:START -->\n{contenido.rstrip()}\n    <!-- {marca}:END -->",
+            html, flags=re.S)
 
     if html != original:
         path.write_text(html, encoding="utf-8")

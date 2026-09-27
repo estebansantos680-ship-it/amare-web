@@ -1,12 +1,16 @@
 /* AMARË — Reserva de cita en línea (reservar.html)
    Flujo: servicio → largo → fecha/franja → datos del cliente → confirmar.
    Al confirmar:
-     1. Se envían dos correos (vía FormSubmit):
-        - Al negocio (facturas@amarecr.com): pedido completo + "datos_json"
-          para la automatización en Python → Google Calendar.
+     0. Si el servicio requiere depósito, el cliente hace SINPE/transferencia y
+        adjunta el comprobante (JPG/PNG) antes de confirmar.
+     1. Se envían dos correos:
+        - Al negocio (facturas@amarecr.com, FormSubmit): pedido completo +
+          comprobante adjunto + enlaces de WhatsApp para confirmar o rechazar
+          + "datos_json" para la automatización en Python → Google Calendar.
         - Al cliente: correo con diseño vía EmailJS (plantilla en
           emails/confirmacion-cliente.html); respaldo de texto por FormSubmit.
-     2. Se abre WhatsApp con el resumen para que el equipo confirme el espacio.
+     2. La pantalla final ofrece avisar por WhatsApp con el resumen.
+   Llegada desde una página de servicio: reservar.html?cat=<categoría>&svc=<servicio>.
    Datos de servicios y precios: js/services-data.js */
 (function () {
   'use strict';
@@ -36,6 +40,7 @@
     fecha: null,
     franja: null,
     cliente: null,
+    comprobante: null, // File (JPG/PNG) del SINPE/transferencia
   };
 
   /* ---------- Helpers ---------- */
@@ -63,8 +68,13 @@
     return a === b ? a : a + ' – ' + b;
   }
 
+  // Regla del salón (Blueprint → Pendientes P-001):
+  //   procedimientos de ₡25.000 a ₡60.000 → depósito ₡15.000
+  //   procedimientos de ₡60.000 en adelante → depósito ₡25.000
+  //   menos de ₡25.000 → sin depósito
+  // Se usa el precio máximo del largo elegido para no quedar por debajo.
   function calcDeposito(precioMax, requiereDeposito) {
-    if (!requiereDeposito || precioMax < 10000) {
+    if (!requiereDeposito || precioMax < 25000) {
       return { requerido: false, monto: 0 };
     }
     if (precioMax < 60000) {
@@ -111,8 +121,20 @@
     envioError: document.getElementById('envioError'),
     btnConfirmar: document.getElementById('btnConfirmar'),
     doneTitle: document.getElementById('doneTitle'),
+    doneTexto: document.getElementById('doneTexto'),
     doneWhatsapp: document.getElementById('doneWhatsapp'),
     box: document.getElementById('bookingBox'),
+    pagoBox: document.getElementById('pagoBox'),
+    pagoMonto: document.getElementById('pagoMonto'),
+    pagoConcepto: document.getElementById('pagoConcepto'),
+    copiarConcepto: document.getElementById('copiarConcepto'),
+    uploadZona: document.getElementById('uploadZona'),
+    inpComprobante: document.getElementById('inpComprobante'),
+    comprobantePreview: document.getElementById('comprobantePreview'),
+    comprobanteThumb: document.getElementById('comprobanteThumb'),
+    comprobanteNombre: document.getElementById('comprobanteNombre'),
+    comprobanteTam: document.getElementById('comprobanteTam'),
+    quitarComprobante: document.getElementById('quitarComprobante'),
   };
 
   if (!els.bookingSummary) return; // esta página no está cargada
@@ -178,7 +200,29 @@
     if (!state.service) return;
     renderStep2();
     goToStep(2);
+    if (window.amareTrack) window.amareTrack('reserva_iniciada', { servicio: state.service.servicio });
   });
+
+  /* ---------- Llegada desde "Reservar este servicio" (?cat=...&svc=...) ---------- */
+  function preseleccionarDesdeURL() {
+    var params = new URLSearchParams(window.location.search);
+    var cat = params.get('cat');
+    var svc = params.get('svc');
+    if (!cat) return;
+    var existeCat = Array.prototype.some.call(els.selCategoria.options, function (o) { return o.value === cat; });
+    if (!existeCat) return;
+    els.selCategoria.value = cat;
+    els.selCategoria.dispatchEvent(new Event('change'));
+    if (!svc) return;
+    var idx = -1;
+    currentCategoryServices.forEach(function (s, i) { if (s.servicio === svc) idx = i; });
+    if (idx < 0) return;
+    els.selServicio.value = String(idx);
+    els.selServicio.dispatchEvent(new Event('change'));
+    renderStep2();
+    goToStep(2);
+    setTimeout(function () { els.box.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 250);
+  }
 
   /* ---------- Paso 2: largo de cabello ---------- */
   function renderStep2() {
@@ -250,11 +294,11 @@
     resetFranjaSelection();
     if (!els.inpFecha.value) return;
     var d = new Date(els.inpFecha.value + 'T12:00:00');
-    if (d.getDay() === 0) {
+    if (d.getDay() === 0 || d.getDay() === 1) {
       state.fecha = null;
       els.availabilityResult.hidden = false;
       els.availabilityResult.className = 'availability-result full';
-      els.availabilityResult.textContent = 'Los domingos descansamos. Elige un día de lunes a sábado.';
+      els.availabilityResult.textContent = 'Domingos y lunes descansamos. Elige un día de martes a sábado.';
       return;
     }
     state.fecha = els.inpFecha.value;
@@ -356,11 +400,125 @@
     html += '</dl>';
     els.bookingSummary.innerHTML = html;
     els.envioError.hidden = true;
-    els.btnConfirmar.disabled = !els.chkPolicy.checked;
+
+    // Bloque de pago: solo si el servicio requiere depósito
+    els.pagoBox.hidden = !deposito.requerido;
+    if (deposito.requerido) {
+      els.pagoMonto.textContent = money(deposito.monto);
+      els.pagoConcepto.textContent = conceptoPago();
+    }
+    actualizarBoton();
   }
 
-  els.chkPolicy.addEventListener('change', function () {
-    els.btnConfirmar.disabled = !els.chkPolicy.checked;
+  // Texto que el cliente pone en la descripción del SINPE (Pendientes P-005):
+  // nombre + 1 apellido + día/mes de la cita. Ej.: "Julio Fallas 28/08"
+  function conceptoPago() {
+    var partes = state.cliente.nombre.split(/\s+/).filter(Boolean);
+    var d = new Date(state.fecha + 'T12:00:00');
+    var ddmm = String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+    return partes.slice(0, 2).join(' ') + ' ' + ddmm;
+  }
+
+  function actualizarBoton() {
+    var necesitaComprobante = state.service && state.tier && currentDeposito().requerido;
+    els.btnConfirmar.disabled = !els.chkPolicy.checked || (necesitaComprobante && !state.comprobante);
+  }
+
+  els.chkPolicy.addEventListener('change', actualizarBoton);
+
+  /* ---------- Copiar datos de pago ---------- */
+  function copiar(texto, btn) {
+    var listo = function () {
+      var original = btn.textContent;
+      btn.classList.add('ok');
+      btn.textContent = 'Copiado';
+      setTimeout(function () { btn.classList.remove('ok'); btn.textContent = original; }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(texto).then(listo, listo);
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = texto; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta); listo();
+    }
+  }
+  document.querySelectorAll('[data-copiar]').forEach(function (btn) {
+    btn.addEventListener('click', function () { copiar(btn.getAttribute('data-copiar'), btn); });
+  });
+  els.copiarConcepto.addEventListener('click', function () { copiar(els.pagoConcepto.textContent, els.copiarConcepto); });
+
+  /* ---------- Comprobante de pago (JPG / PNG) ---------- */
+  var MAX_MB = 8;
+
+  function tamLegible(bytes) {
+    return bytes > 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.round(bytes / 1024) + ' KB';
+  }
+
+  // Fotos grandes del celular se reducen a 1600 px para que el correo llegue rápido.
+  function optimizarImagen(file) {
+    return new Promise(function (resolve) {
+      if (file.size < 1200 * 1024 || !window.createImageBitmap) return resolve(file);
+      createImageBitmap(file).then(function (bmp) {
+        var escala = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(bmp.width * escala);
+        canvas.height = Math.round(bmp.height * escala);
+        canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(function (blob) {
+          if (!blob) return resolve(file);
+          var nombre = file.name.replace(/\.(png|jpe?g)$/i, '') + '.jpg';
+          resolve(new File([blob], nombre, { type: 'image/jpeg' }));
+        }, 'image/jpeg', 0.85);
+      }).catch(function () { resolve(file); });
+    });
+  }
+
+  function mostrarErrorPago(msg) {
+    els.envioError.hidden = !msg;
+    els.envioError.textContent = msg || '';
+  }
+
+  function cargarComprobante(file) {
+    if (!file) return;
+    if (!/^image\/(jpeg|png)$/.test(file.type)) {
+      mostrarErrorPago('El comprobante debe ser una imagen JPG o PNG.');
+      return;
+    }
+    if (file.size > MAX_MB * 1048576) {
+      mostrarErrorPago('La imagen pesa más de ' + MAX_MB + ' MB. Envía una captura de pantalla del comprobante.');
+      return;
+    }
+    mostrarErrorPago('');
+    optimizarImagen(file).then(function (final) {
+      state.comprobante = final;
+      els.comprobanteThumb.src = URL.createObjectURL(final);
+      els.comprobanteNombre.textContent = file.name;
+      els.comprobanteTam.textContent = tamLegible(final.size) + ' · listo para enviar';
+      els.comprobantePreview.hidden = false;
+      els.uploadZona.hidden = true;
+      actualizarBoton();
+    });
+  }
+
+  els.inpComprobante.addEventListener('change', function () {
+    cargarComprobante(els.inpComprobante.files[0]);
+  });
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    els.uploadZona.addEventListener(ev, function (e) { e.preventDefault(); els.uploadZona.classList.add('drag'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    els.uploadZona.addEventListener(ev, function (e) { e.preventDefault(); els.uploadZona.classList.remove('drag'); });
+  });
+  els.uploadZona.addEventListener('drop', function (e) {
+    if (e.dataTransfer && e.dataTransfer.files[0]) cargarComprobante(e.dataTransfer.files[0]);
+  });
+  els.quitarComprobante.addEventListener('click', function () {
+    state.comprobante = null;
+    els.inpComprobante.value = '';
+    els.comprobantePreview.hidden = true;
+    els.uploadZona.hidden = false;
+    actualizarBoton();
   });
 
   function whatsappUrl() {
@@ -373,7 +531,7 @@
       '• Servicio: ' + s.servicio + ' (' + s.categoria + ')',
       '• Largo: ' + state.lengthLabel + ' — ' + priceRangeLabel(state.tier),
       '• Fecha: ' + fechaLegible(state.fecha) + ' — ' + state.franja,
-      '• Depósito: ' + (deposito.requerido ? money(deposito.monto) : 'no requiere'),
+      '• Depósito: ' + (deposito.requerido ? money(deposito.monto) + ' (ya adjunté el comprobante en la web)' : 'no requiere'),
     ];
     if (c.notas) lines.push('• Comentarios: ' + c.notas);
     return 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(lines.join('\n'));
@@ -422,7 +580,13 @@
         duracion_max_h: tier.durMax,
       },
       cita: { fecha: state.fecha, franja: state.franja, horario_sugerido: s.horario || '' },
-      deposito: { requerido: deposito.requerido, monto: deposito.monto },
+      deposito: {
+        requerido: deposito.requerido,
+        monto: deposito.monto,
+        comprobante_adjunto: !!state.comprobante,
+        descripcion_sinpe: deposito.requerido ? conceptoPago() : '',
+      },
+      estado: deposito.requerido ? 'pendiente_validacion_pago' : 'pendiente_confirmacion',
       comentarios: c.notas || '',
     };
   }
@@ -435,21 +599,69 @@
     return target;
   }
 
-  // Correo 1 → negocio (facturas@ → Gmail): todo el pedido + datos_json para la automatización.
+  // Enlaces de WhatsApp para que el admin responda al cliente con un toque.
+  function whatsappCliente(texto) {
+    var tel = state.cliente.celular.replace(/\D/g, '');
+    return 'https://wa.me/' + tel + '?text=' + encodeURIComponent(texto);
+  }
+
+  function accionesAdmin() {
+    var c = state.cliente;
+    var s = state.service;
+    var nombre = c.nombre.split(' ')[0];
+    var cuando = fechaLegible(state.fecha) + ' (' + state.franja.toLowerCase() + ')';
+    var deposito = currentDeposito();
+    var confirmar = 'Hola ' + nombre + ', te escribimos de Amarë Beauty Center. ' +
+      (deposito.requerido ? 'Validamos tu depósito de ' + money(deposito.monto) + ' y ' : '') +
+      'tu cita de ' + s.servicio + ' queda confirmada para el ' + cuando + ' a las __:__. ¡Te esperamos!';
+    var rechazar = 'Hola ' + nombre + ', te escribimos de Amarë Beauty Center. No pudimos validar el comprobante de tu reserva de ' +
+      s.servicio + ' para el ' + cuando + '. Motivo: ________. Por esta razón liberamos el espacio. ' +
+      'Si fue un error, responde este mensaje con el comprobante correcto y con gusto te ayudamos a reagendar.';
+    return {
+      'Admin · Confirmar cita (WhatsApp)': whatsappCliente(confirmar),
+      'Admin · Rechazar y liberar espacio (WhatsApp)': whatsappCliente(rechazar),
+    };
+  }
+
+  // Correo 1 → negocio (facturas@): pedido + comprobante adjunto + datos_json para la automatización.
   function payloadNegocio() {
     var s = state.service;
     var c = state.cliente;
+    var deposito = currentDeposito();
+    var estado = deposito.requerido ? 'PENDIENTE: validar comprobante de ' + money(deposito.monto) : 'Sin depósito: confirmar hora con la clienta';
     return assign(
       {
-        _subject: 'Nueva cita: ' + s.servicio + ' · ' + state.fecha + ' ' + state.franja + ' · ' + c.nombre,
+        _subject: (deposito.requerido ? '[Validar pago] ' : '') + 'Nueva cita: ' + s.servicio + ' · ' + state.fecha + ' ' + state.franja + ' · ' + c.nombre,
         _template: 'table',
         _captcha: 'false',
         _replyto: c.correo,
         _honey: '',
+        'Estado de la reserva': estado,
       },
       filasPedido(),
-      { 'Correo': c.correo, 'datos_json': JSON.stringify(datosAutomatizacion()) }
+      deposito.requerido ? { 'Descripción esperada del SINPE': conceptoPago() } : {},
+      { 'Correo': c.correo },
+      accionesAdmin(),
+      { 'datos_json': JSON.stringify(datosAutomatizacion()) }
     );
+  }
+
+  // FormSubmit recibe el comprobante como archivo adjunto (multipart).
+  function enviarNegocio(payload) {
+    var fd = new FormData();
+    Object.keys(payload).forEach(function (k) { fd.append(k, payload[k]); });
+    if (state.comprobante) fd.append('Comprobante de pago', state.comprobante, state.comprobante.name);
+    return fetch(ENDPOINT_NEGOCIO, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' },
+      body: fd,
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      if (String(j.success) !== 'true') throw new Error(j.message || 'FormSubmit rechazó el envío');
+      return j;
+    });
   }
 
   // Correo 2 → cliente: FormSubmit le envía el saludo (_autoresponse) + la tabla del pedido.
@@ -495,6 +707,9 @@
       franja: f['Momento del día'],
       deposito: f['Depósito'],
       comentarios: f['Comentarios'],
+      nota_pago: currentDeposito().requerido
+        ? 'Recibimos su comprobante del depósito de ' + money(currentDeposito().monto) + '. Nuestro equipo lo validará y le confirmará la hora exacta por WhatsApp. Si el monto no coincide, le avisaremos el motivo.'
+        : 'Este servicio no requiere depósito. En breve le escribimos por WhatsApp para confirmar la hora exacta.',
     };
   }
 
@@ -529,18 +744,19 @@
 
   els.btnConfirmar.addEventListener('click', function () {
     if (!els.chkPolicy.checked || !state.cliente) return;
+    var deposito = currentDeposito();
+    if (deposito.requerido && !state.comprobante) {
+      mostrarErrorPago('Adjunta el comprobante del depósito para confirmar tu reserva.');
+      return;
+    }
     var wa = whatsappUrl();
     var negocio = payloadNegocio();
     var cliente = payloadCliente();
 
-    // WhatsApp se abre dentro del mismo clic para que el navegador no lo bloquee.
-    window.open(wa, '_blank', 'noopener');
-
+    mostrarErrorPago('');
     els.btnConfirmar.classList.add('is-loading');
-    els.btnConfirmar.textContent = 'Enviando…';
+    els.btnConfirmar.textContent = state.comprobante ? 'Enviando comprobante…' : 'Enviando…';
 
-    // Cada correo tiene un reintento por si la conexión del celular falla.
-    // Aunque falle alguno, la solicitud ya salió por WhatsApp.
     function conReintento(endpoint, payload) {
       return enviarCorreo(endpoint, payload)
         .catch(function () { return enviarCorreo(endpoint, payload); })
@@ -549,23 +765,41 @@
         });
     }
 
-    // Cliente: correo con diseño por EmailJS (si falla, respaldo de texto por FormSubmit).
-    var correoCliente = emailjsListo()
-      ? enviarEmailJS().catch(function (err) {
-          if (window.console) console.warn('EmailJS falló, se usa FormSubmit:', err);
-          return conReintento(ENDPOINT_CLIENTE, cliente);
-        })
-      : conReintento(ENDPOINT_CLIENTE, cliente);
-
-    Promise.all([
-      conReintento(ENDPOINT_NEGOCIO, negocio),
-      correoCliente,
-    ])
+    // 1) Primero el pedido + comprobante al negocio (con un reintento).
+    //    Si no llega, no se confirma: el comprobante debe quedar en facturas@.
+    enviarNegocio(negocio)
+      .catch(function () { return enviarNegocio(negocio); })
       .then(function () {
-        els.doneTitle.textContent = '¡Gracias, ' + state.cliente.nombre.split(' ')[0] + '! Recibimos tu solicitud';
+        // 2) Correo con diseño al cliente (EmailJS; respaldo de texto por FormSubmit).
+        var correoCliente = emailjsListo()
+          ? enviarEmailJS().catch(function (err) {
+              if (window.console) console.warn('EmailJS falló, se usa FormSubmit:', err);
+              return conReintento(ENDPOINT_CLIENTE, cliente);
+            })
+          : conReintento(ENDPOINT_CLIENTE, cliente);
+        return correoCliente;
+      })
+      .then(function () {
+        var nombre = state.cliente.nombre.split(' ')[0];
+        els.doneTitle.textContent = '¡Gracias, ' + nombre + '! Recibimos tu reserva';
+        els.doneTexto.textContent = deposito.requerido
+          ? 'Recibimos tu comprobante y te enviamos el resumen a tu correo. En cuanto validemos el depósito te confirmamos la hora exacta por WhatsApp.'
+          : 'Te enviamos el resumen a tu correo. En breve te escribimos por WhatsApp para confirmar la hora exacta.';
         els.doneWhatsapp.href = wa;
         goToStep(6);
+        if (window.amareTrack) window.amareTrack('reserva_confirmada', {
+          servicio: state.service.servicio, categoria: state.service.categoria,
+          value: deposito.monto, currency: 'CRC',
+        });
+      })
+      .catch(function (err) {
+        if (window.console) console.warn('No se pudo enviar la reserva:', err);
+        els.btnConfirmar.classList.remove('is-loading');
+        els.btnConfirmar.textContent = 'Confirmar reserva';
+        mostrarErrorPago('No pudimos enviar tu reserva. Revisa tu conexión e inténtalo de nuevo. Si el problema sigue, escríbenos por WhatsApp al 8807-3849.');
       });
   });
+
+  preseleccionarDesdeURL();
 
 })();

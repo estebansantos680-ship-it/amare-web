@@ -1,4 +1,58 @@
-/* AMARË — interacciones de interfaz (menú móvil, "leer más") */
+/* AMARË — interacciones de interfaz (menú móvil, "leer más") y analítica */
+
+/* ---------- Analítica ----------
+   - Cloudflare Web Analytics: visitas y páginas vistas (sin cookies).
+   - Google Analytics 4: visitas + conversiones (se activa al poner el ID "G-...").
+   Eventos: click_whatsapp, click_reservar_servicio, reserva_iniciada, reserva_confirmada. */
+(function () {
+  'use strict';
+  var CF_BEACON_TOKEN = '';   // Cloudflare → Web Analytics → amarecr.com → token del snippet
+  var GA_ID = '';             // Google Analytics 4 → ID de medición (G-XXXXXXXXXX)
+
+  var enProduccion = /(^|\.)amarecr\.com$/.test(window.location.hostname);
+
+  function cargarScript(src, attrs) {
+    var s = document.createElement('script');
+    s.defer = true; s.src = src;
+    Object.keys(attrs || {}).forEach(function (k) { s.setAttribute(k, attrs[k]); });
+    document.head.appendChild(s);
+  }
+
+  if (enProduccion && CF_BEACON_TOKEN) {
+    cargarScript('https://static.cloudflareinsights.com/beacon.min.js',
+      { 'data-cf-beacon': JSON.stringify({ token: CF_BEACON_TOKEN }) });
+  }
+
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function () { window.dataLayer.push(arguments); };
+  if (enProduccion && GA_ID) {
+    cargarScript('https://www.googletagmanager.com/gtag/js?id=' + GA_ID);
+    window.gtag('js', new Date());
+    window.gtag('config', GA_ID);
+  }
+
+  // amareTrack('evento', {datos}) — usado también por booking.js
+  window.amareTrack = function (evento, datos) {
+    if (enProduccion && GA_ID) window.gtag('event', evento, datos || {});
+    if (!enProduccion && window.console) console.info('[analítica]', evento, datos || {});
+  };
+
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a');
+    if (!a) return;
+    var href = a.getAttribute('href') || '';
+    if (/wa\.me|api\.whatsapp\.com/.test(href)) {
+      window.amareTrack('click_whatsapp', { ubicacion: window.location.pathname });
+    } else if (a.classList.contains('btn-reservar')) {
+      var card = a.closest('.service-card');
+      var titulo = card && card.querySelector('h3');
+      window.amareTrack('click_reservar_servicio', { servicio: titulo ? titulo.textContent : '' });
+    } else if (/reservar\.html/.test(href)) {
+      window.amareTrack('click_reservar', { ubicacion: window.location.pathname });
+    }
+  });
+})();
+
 (function () {
   'use strict';
 
