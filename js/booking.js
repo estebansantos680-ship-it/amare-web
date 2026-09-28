@@ -626,79 +626,83 @@
   }
 
   // FormSubmit solo conserva archivos en su endpoint normal (no en /ajax/), el
-  // campo debe llamarse "attachment" y solo acepta envíos como formulario real
-  // (un fetch del navegador no llega). Por eso se arma un <form> oculto que se
-  // envía dentro de un iframe; FormSubmit redirige a _next y el iframe carga.
-  // El endpoint con adjuntos de FormSubmit rechaza cualquier carácter fuera de
-  // ASCII (tildes, ñ, ₡, ·). Se limpia el texto visible y el JSON se escapa
+  // campo debe llamarse "attachment" y solo acepta un formulario real enviado en
+  // la página (fetch o iframe no llegan). Además rechaza cualquier carácter fuera
+  // de ASCII (tildes, ñ, ₡, ·): se limpia el texto visible y el JSON se escapa
   // (é...) para que la automatización recupere los datos exactos.
   function aAscii(texto) {
     return String(texto)
       .replace(/₡/g, 'CRC ').replace(/[·•]/g, '-').replace(/[–—]/g, '-')
       .replace(/¡/g, '').replace(/¿/g, '')
-      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .replace(/[^\x20-\x7E\n]/g, '');
   }
 
   function jsonAscii(texto) {
-    return texto.replace(/[\u007f-￿]/g, function (c) {
+    return texto.replace(/[\u007f-\uffff]/g, function (c) {
       return '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4);
     });
   }
 
-  function enviarNegocio(payload) {
-    // Sin comprobante: vía AJAX normal (conserva tildes y confirma el envío).
-    if (!state.comprobante) return enviarCorreo(ENDPOINT_NEGOCIO, payload);
-
+  // Pedido con comprobante: se envía como formulario normal en la misma página
+  // (en un iframe oculto FormSubmit lo descarta). FormSubmit redirige a _next,
+  // que vuelve a reservar.html?reserva=enviada y ahí se muestra el "¡Gracias!".
+  function enviarNegocioConComprobante(payload) {
     var limpio = {};
     Object.keys(payload).forEach(function (k) {
       limpio[aAscii(k)] = k === 'datos_json' ? jsonAscii(payload[k]) : aAscii(payload[k]);
     });
-    payload = limpio;
+    var campos = assign({}, limpio, { _next: 'https://amarecr.com/reservar.html?reserva=enviada' });
 
-    return new Promise(function (resolve, reject) {
-      var nombre = 'envio-reserva-' + Date.now();
-      var iframe = document.createElement('iframe');
-      iframe.name = nombre;
-      iframe.hidden = true;
-      var form = document.createElement('form');
-      form.method = 'POST';
-      form.action = ENDPOINT_NEGOCIO_ADJUNTOS;
-      form.enctype = 'multipart/form-data';
-      form.target = nombre;
-      form.hidden = true;
-      var campos = assign({}, payload, { _next: 'https://amarecr.com/robots.txt' });
-      Object.keys(campos).forEach(function (k) {
-        var input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = k;
-        input.value = campos[k];
-        form.appendChild(input);
-      });
-      if (state.comprobante) {
-        var archivo = document.createElement('input');
-        archivo.type = 'file';
-        archivo.name = 'attachment';
-        var dt = new DataTransfer();
-        var ext = state.comprobante.type === 'application/pdf' ? '.pdf' : (state.comprobante.type === 'image/png' ? '.png' : '.jpg');
-        var nombreArchivo = 'comprobante-' + aAscii(payload['Nombre'] || 'cliente').replace(/[^A-Za-z0-9]+/g, '-').toLowerCase() + ext;
-        dt.items.add(new File([state.comprobante], nombreArchivo, { type: state.comprobante.type }));
-        archivo.files = dt.files;
-        form.appendChild(archivo);
-      }
-      var listo = false;
-      var terminar = function (ok) {
-        if (listo) return;
-        listo = true;
-        setTimeout(function () { iframe.remove(); form.remove(); }, 1000);
-        ok ? resolve() : reject(new Error('Sin respuesta de FormSubmit'));
-      };
-      iframe.addEventListener('load', function () { terminar(true); });
-      setTimeout(function () { terminar(false); }, 45000);
-      document.body.appendChild(iframe);
-      document.body.appendChild(form);
-      form.submit();
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = ENDPOINT_NEGOCIO_ADJUNTOS;
+    form.enctype = 'multipart/form-data';
+    form.hidden = true;
+    Object.keys(campos).forEach(function (k) {
+      var input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = k;
+      input.value = campos[k];
+      form.appendChild(input);
     });
+    var archivo = document.createElement('input');
+    archivo.type = 'file';
+    archivo.name = 'attachment';
+    var ext = state.comprobante.type === 'application/pdf' ? '.pdf' : (state.comprobante.type === 'image/png' ? '.png' : '.jpg');
+    var nombreArchivo = 'comprobante-' + aAscii(state.cliente.nombre).replace(/[^A-Za-z0-9]+/g, '-').toLowerCase() + ext;
+    var dt = new DataTransfer();
+    dt.items.add(new File([state.comprobante], nombreArchivo, { type: state.comprobante.type }));
+    archivo.files = dt.files;
+    form.appendChild(archivo);
+    document.body.appendChild(form);
+    form.submit();
+  }
+
+  // Datos para mostrar el "¡Gracias!" al volver de FormSubmit.
+  var CLAVE_RESERVA = 'amare_reserva_enviada';
+
+  function mostrarGracias(datos) {
+    els.doneTitle.textContent = '¡Gracias, ' + datos.nombre + '! Recibimos tu reserva';
+    els.doneTexto.textContent = datos.conDeposito
+      ? 'Recibimos tu comprobante y te enviamos el resumen a tu correo. En cuanto validemos el depósito te confirmamos la hora exacta por WhatsApp.'
+      : 'Te enviamos el resumen a tu correo. En breve te escribimos por WhatsApp para confirmar la hora exacta.';
+    els.doneWhatsapp.href = datos.wa;
+    goToStep(6);
+    if (window.amareTrack) window.amareTrack('reserva_confirmada', {
+      servicio: datos.servicio, categoria: datos.categoria, value: datos.deposito, currency: 'CRC',
+    });
+  }
+
+  function reservaEnviadaAlVolver() {
+    if (new URLSearchParams(window.location.search).get('reserva') !== 'enviada') return false;
+    var datos = null;
+    try { datos = JSON.parse(sessionStorage.getItem(CLAVE_RESERVA)); sessionStorage.removeItem(CLAVE_RESERVA); } catch (e) {}
+    if (window.history && history.replaceState) history.replaceState(null, '', 'reservar.html');
+    if (!datos) return false;
+    mostrarGracias(datos);
+    setTimeout(function () { els.box.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
+    return true;
   }
 
   // Correo 2 → cliente: FormSubmit le envía el saludo (_autoresponse) + la tabla del pedido.
@@ -786,7 +790,14 @@
       mostrarErrorPago('Adjunta el comprobante del depósito para confirmar tu reserva.');
       return;
     }
-    var wa = whatsappUrl();
+    var datosGracias = {
+      nombre: state.cliente.nombre.split(' ')[0],
+      conDeposito: deposito.requerido,
+      wa: whatsappUrl(),
+      servicio: state.service.servicio,
+      categoria: state.service.categoria,
+      deposito: deposito.monto,
+    };
     var negocio = payloadNegocio();
     var cliente = payloadCliente();
 
@@ -802,32 +813,29 @@
         });
     }
 
-    // 1) Primero el pedido + comprobante al negocio (sin reintento: evitaría duplicados).
-    //    Si no llega, no se confirma: el comprobante debe quedar en facturas@.
-    enviarNegocio(negocio)
-      .then(function () {
-        // 2) Correo con diseño al cliente (EmailJS; respaldo de texto por FormSubmit).
-        var correoCliente = emailjsListo()
-          ? enviarEmailJS().catch(function (err) {
-              if (window.console) console.warn('EmailJS falló, se usa FormSubmit:', err);
-              return conReintento(ENDPOINT_CLIENTE, cliente);
-            })
-          : conReintento(ENDPOINT_CLIENTE, cliente);
-        return correoCliente;
-      })
-      .then(function () {
-        var nombre = state.cliente.nombre.split(' ')[0];
-        els.doneTitle.textContent = '¡Gracias, ' + nombre + '! Recibimos tu reserva';
-        els.doneTexto.textContent = deposito.requerido
-          ? 'Recibimos tu comprobante y te enviamos el resumen a tu correo. En cuanto validemos el depósito te confirmamos la hora exacta por WhatsApp.'
-          : 'Te enviamos el resumen a tu correo. En breve te escribimos por WhatsApp para confirmar la hora exacta.';
-        els.doneWhatsapp.href = wa;
-        goToStep(6);
-        if (window.amareTrack) window.amareTrack('reserva_confirmada', {
-          servicio: state.service.servicio, categoria: state.service.categoria,
-          value: deposito.monto, currency: 'CRC',
-        });
-      })
+    // Correo con diseño al cliente (EmailJS; respaldo de texto por FormSubmit).
+    function correoCliente() {
+      return emailjsListo()
+        ? enviarEmailJS().catch(function (err) {
+            if (window.console) console.warn('EmailJS falló, se usa FormSubmit:', err);
+            return conReintento(ENDPOINT_CLIENTE, cliente);
+          })
+        : conReintento(ENDPOINT_CLIENTE, cliente);
+    }
+
+    if (state.comprobante) {
+      // 1) correo al cliente  2) pedido + comprobante (la página va a FormSubmit y regresa)
+      correoCliente().then(function () {
+        try { sessionStorage.setItem(CLAVE_RESERVA, JSON.stringify(datosGracias)); } catch (e) {}
+        enviarNegocioConComprobante(negocio);
+      });
+      return;
+    }
+
+    // Sin depósito: pedido por AJAX (confirma el envío) y luego correo al cliente.
+    enviarCorreo(ENDPOINT_NEGOCIO, negocio)
+      .then(correoCliente)
+      .then(function () { mostrarGracias(datosGracias); })
       .catch(function (err) {
         if (window.console) console.warn('No se pudo enviar la reserva:', err);
         els.btnConfirmar.classList.remove('is-loading');
@@ -836,6 +844,6 @@
       });
   });
 
-  preseleccionarDesdeURL();
+  if (!reservaEnviadaAlVolver()) preseleccionarDesdeURL();
 
 })();
