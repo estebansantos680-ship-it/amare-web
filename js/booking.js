@@ -625,15 +625,52 @@
     );
   }
 
-  // FormSubmit solo conserva archivos en su endpoint normal (no en /ajax/), y el
-  // campo debe llamarse "attachment". La respuesta es una redirección sin CORS,
-  // así que se envía en modo no-cors: si la red falla, fetch lanza error.
+  // FormSubmit solo conserva archivos en su endpoint normal (no en /ajax/), el
+  // campo debe llamarse "attachment" y solo acepta envíos como formulario real
+  // (un fetch del navegador no llega). Por eso se arma un <form> oculto que se
+  // envía dentro de un iframe; FormSubmit redirige a _next y el iframe carga.
   function enviarNegocio(payload) {
-    var fd = new FormData();
-    Object.keys(payload).forEach(function (k) { fd.append(k, payload[k]); });
-    fd.append('_next', 'https://amarecr.com/reservar.html');
-    if (state.comprobante) fd.append('attachment', state.comprobante, state.comprobante.name);
-    return fetch(ENDPOINT_NEGOCIO_ADJUNTOS, { method: 'POST', mode: 'no-cors', body: fd });
+    return new Promise(function (resolve, reject) {
+      var nombre = 'envio-reserva-' + Date.now();
+      var iframe = document.createElement('iframe');
+      iframe.name = nombre;
+      iframe.hidden = true;
+      var form = document.createElement('form');
+      form.method = 'POST';
+      form.action = ENDPOINT_NEGOCIO_ADJUNTOS;
+      form.enctype = 'multipart/form-data';
+      form.target = nombre;
+      form.hidden = true;
+      var campos = assign({}, payload, { _next: 'https://amarecr.com/robots.txt' });
+      Object.keys(campos).forEach(function (k) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = k;
+        input.value = campos[k];
+        form.appendChild(input);
+      });
+      if (state.comprobante) {
+        var archivo = document.createElement('input');
+        archivo.type = 'file';
+        archivo.name = 'attachment';
+        var dt = new DataTransfer();
+        dt.items.add(state.comprobante);
+        archivo.files = dt.files;
+        form.appendChild(archivo);
+      }
+      var listo = false;
+      var terminar = function (ok) {
+        if (listo) return;
+        listo = true;
+        setTimeout(function () { iframe.remove(); form.remove(); }, 1000);
+        ok ? resolve() : reject(new Error('Sin respuesta de FormSubmit'));
+      };
+      iframe.addEventListener('load', function () { terminar(true); });
+      setTimeout(function () { terminar(false); }, 45000);
+      document.body.appendChild(iframe);
+      document.body.appendChild(form);
+      form.submit();
+    });
   }
 
   // Correo 2 → cliente: FormSubmit le envía el saludo (_autoresponse) + la tabla del pedido.
@@ -737,10 +774,9 @@
         });
     }
 
-    // 1) Primero el pedido + comprobante al negocio (con un reintento).
+    // 1) Primero el pedido + comprobante al negocio (sin reintento: evitaría duplicados).
     //    Si no llega, no se confirma: el comprobante debe quedar en facturas@.
     enviarNegocio(negocio)
-      .catch(function () { return enviarNegocio(negocio); })
       .then(function () {
         // 2) Correo con diseño al cliente (EmailJS; respaldo de texto por FormSubmit).
         var correoCliente = emailjsListo()
