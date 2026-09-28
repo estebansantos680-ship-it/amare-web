@@ -824,8 +824,12 @@
     }
 
     if (state.comprobante) {
-      // 1) correo al cliente  2) pedido + comprobante (la página va a FormSubmit y regresa)
-      correoCliente().then(function () {
+      // 1) pedido por AJAX (respaldo seguro, sin adjunto)  2) correo al cliente
+      // 3) pedido + comprobante adjunto (la página va a FormSubmit y regresa)
+      // PENDIENTE: el correo con adjunto aún no llega de forma confiable (ver COMO-PUBLICAR.md).
+      enviarCorreo(ENDPOINT_NEGOCIO, negocio).catch(function (err) {
+        if (window.console) console.warn('Pedido AJAX falló:', err);
+      }).then(correoCliente).then(function () {
         try { sessionStorage.setItem(CLAVE_RESERVA, JSON.stringify(datosGracias)); } catch (e) {}
         enviarNegocioConComprobante(negocio);
       });
