@@ -629,7 +629,33 @@
   // campo debe llamarse "attachment" y solo acepta envíos como formulario real
   // (un fetch del navegador no llega). Por eso se arma un <form> oculto que se
   // envía dentro de un iframe; FormSubmit redirige a _next y el iframe carga.
+  // El endpoint con adjuntos de FormSubmit rechaza cualquier carácter fuera de
+  // ASCII (tildes, ñ, ₡, ·). Se limpia el texto visible y el JSON se escapa
+  // (é...) para que la automatización recupere los datos exactos.
+  function aAscii(texto) {
+    return String(texto)
+      .replace(/₡/g, 'CRC ').replace(/[·•]/g, '-').replace(/[–—]/g, '-')
+      .replace(/¡/g, '').replace(/¿/g, '')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^\x20-\x7E\n]/g, '');
+  }
+
+  function jsonAscii(texto) {
+    return texto.replace(/[\u007f-￿]/g, function (c) {
+      return '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4);
+    });
+  }
+
   function enviarNegocio(payload) {
+    // Sin comprobante: vía AJAX normal (conserva tildes y confirma el envío).
+    if (!state.comprobante) return enviarCorreo(ENDPOINT_NEGOCIO, payload);
+
+    var limpio = {};
+    Object.keys(payload).forEach(function (k) {
+      limpio[aAscii(k)] = k === 'datos_json' ? jsonAscii(payload[k]) : aAscii(payload[k]);
+    });
+    payload = limpio;
+
     return new Promise(function (resolve, reject) {
       var nombre = 'envio-reserva-' + Date.now();
       var iframe = document.createElement('iframe');
@@ -654,7 +680,9 @@
         archivo.type = 'file';
         archivo.name = 'attachment';
         var dt = new DataTransfer();
-        dt.items.add(state.comprobante);
+        var ext = state.comprobante.type === 'application/pdf' ? '.pdf' : (state.comprobante.type === 'image/png' ? '.png' : '.jpg');
+        var nombreArchivo = 'comprobante-' + aAscii(payload['Nombre'] || 'cliente').replace(/[^A-Za-z0-9]+/g, '-').toLowerCase() + ext;
+        dt.items.add(new File([state.comprobante], nombreArchivo, { type: state.comprobante.type }));
         archivo.files = dt.files;
         form.appendChild(archivo);
       }
