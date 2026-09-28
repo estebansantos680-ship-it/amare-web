@@ -608,10 +608,12 @@
     var s = state.service;
     var c = state.cliente;
     var deposito = currentDeposito();
-    var estado = deposito.requerido ? 'PENDIENTE: validar comprobante de ' + money(deposito.monto) : 'Sin depósito: confirmar hora con la clienta';
+    var estado = deposito.requerido
+      ? 'PENDIENTE: validar comprobante de ' + money(deposito.monto) + ' (llega en un correo aparte: "Comprobante de pago: ' + c.nombre + '")'
+      : 'Sin depósito: confirmar hora con la clienta';
     return assign(
       {
-        _subject: (deposito.requerido ? '[Validar pago] ' : '') + 'Nueva cita: ' + s.servicio + ' · ' + state.fecha + ' ' + state.franja + ' · ' + c.nombre,
+        _subject: 'Nueva cita: ' + s.servicio + ' · ' + state.fecha + ' ' + state.franja + ' · ' + c.nombre,
         _template: 'table',
         _captcha: 'false',
         _replyto: c.correo,
@@ -647,6 +649,30 @@
   // Pedido con comprobante: se envía como formulario normal en la misma página
   // (en un iframe oculto FormSubmit lo descarta). FormSubmit redirige a _next,
   // que vuelve a reservar.html?reserva=enviada y ahí se muestra el "¡Gracias!".
+  // Correo 2 → negocio: solo el comprobante y los datos para validarlo.
+  // Importante: NO incluir datos_json aquí; con adjunto, FormSubmit rechaza el
+  // envío si lleva ese JSON (probado 28-sep-2026). Los datos completos van en
+  // el correo "Nueva cita" (AJAX).
+  function payloadComprobante() {
+    var s = state.service;
+    var c = state.cliente;
+    var deposito = currentDeposito();
+    return {
+      _subject: 'Comprobante de pago: ' + c.nombre + ' - ' + s.servicio + ' - ' + state.fecha + ' ' + state.franja,
+      _template: 'table',
+      _captcha: 'false',
+      _replyto: c.correo,
+      'Estado': 'Validar que el monto y la descripcion coincidan',
+      'Nombre': c.nombre,
+      'Celular': c.celular,
+      'Correo': c.correo,
+      'Servicio': s.servicio + ' (' + s.categoria + ')',
+      'Fecha de la cita': fechaLegible(state.fecha) + ' - ' + state.franja,
+      'Monto del deposito': money(deposito.monto),
+      'Descripcion esperada del SINPE': conceptoPago(),
+    };
+  }
+
   function enviarNegocioConComprobante(payload) {
     var limpio = {};
     Object.keys(payload).forEach(function (k) {
@@ -824,14 +850,13 @@
     }
 
     if (state.comprobante) {
-      // 1) pedido por AJAX (respaldo seguro, sin adjunto)  2) correo al cliente
-      // 3) pedido + comprobante adjunto (la página va a FormSubmit y regresa)
-      // PENDIENTE: el correo con adjunto aún no llega de forma confiable (ver COMO-PUBLICAR.md).
+      // 1) "Nueva cita" por AJAX (datos completos + datos_json)  2) correo al cliente
+      // 3) "Comprobante de pago" con el archivo adjunto (la página va a FormSubmit y regresa)
       enviarCorreo(ENDPOINT_NEGOCIO, negocio).catch(function (err) {
         if (window.console) console.warn('Pedido AJAX falló:', err);
       }).then(correoCliente).then(function () {
         try { sessionStorage.setItem(CLAVE_RESERVA, JSON.stringify(datosGracias)); } catch (e) {}
-        enviarNegocioConComprobante(negocio);
+        enviarNegocioConComprobante(payloadComprobante());
       });
       return;
     }
