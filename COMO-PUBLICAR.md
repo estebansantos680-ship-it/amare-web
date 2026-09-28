@@ -85,6 +85,15 @@ Custom domain: `amarecr.com`. Cuando GitHub emita el certificado, marcar **Enfor
      plantilla `emails/confirmacion-cliente.html`. IDs en `js/booking.js` (objeto `EMAILJS`).
      Si EmailJS falla o se acaba la cuota, se envía un respaldo de texto por FormSubmit a través de
      `confirmaciones@amarecr.com` (alias de facturas@).
+- **Depósito y comprobante (27-sep-2026):** regla Pendientes P-001 (₡25.000–59.999 → ₡15.000; ₡60.000+ → ₡25.000;
+  menos de ₡25.000 sin depósito). El cliente ve SINPE 8807-3849 / IBAN CR79010200009718091249 y debe adjuntar
+  comprobante JPG/PNG/PDF para confirmar.
+  - **PENDIENTE:** el correo con el comprobante adjunto aún no llega de forma confiable. Hallazgos: FormSubmit
+    solo conserva archivos en `https://formsubmit.co/facturas@amarecr.com` (no en `/ajax/`), el campo debe llamarse
+    `attachment`, rechaza cualquier carácter no ASCII y descarta envíos desde fetch o iframe; con formulario real
+    en la página sí llegó en pruebas simples, pero el envío completo desde la reserva no llegó y `_next` con
+    `?reserva=enviada` no redirigió. Mientras tanto el pedido también se envía por AJAX (sin adjunto) como respaldo.
+  - Alternativa a evaluar: enviar el comprobante vía EmailJS (plan pago admite adjuntos) o subirlo a Google Drive.
 - Si cambias el diseño del correo del cliente: edita `emails/confirmacion-cliente.html` y pégalo de nuevo en
   EmailJS → Email Templates → template_nrvafoo.
 - **El correo del dominio está en Google Workspace** (buzón real `facturas@amarecr.com`, se entra por gmail.com).
