@@ -46,11 +46,11 @@ var CONFIG = {
     // no requieren volver a publicar).
     templates: {
       solicitud: 'template_nrvafoo',   // 1. Solicitud recibida (ya existe)
-      pagoAprobado: '',                // 2. Pago confirmado
-      pagoRechazado: '',               // 3. Pago rechazado
-      citaConfirmada: '',              // 4. Cita confirmada
-      diaSaturado: '',                 // 5. Día saturado
-      recordatorio: ''                 // 6. Recordatorio 24 h
+      pagoAprobado: 'template_bore1yc',   // 2. Pago confirmado
+      pagoRechazado: 'template_irdtu34',  // 3. Pago rechazado
+      citaConfirmada: 'template_idaj1xg', // 4. Cita confirmada
+      diaSaturado: 'template_17lidvh',    // 5. Día saturado
+      recordatorio: 'template_36l8drt'    // 6. Recordatorio 24 h
     }
   }
 };
