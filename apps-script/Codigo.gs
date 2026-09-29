@@ -290,9 +290,9 @@ function pesoDe_(r) {
   return 0; // rechazadas, canceladas y "día saturado" (pendiente de nueva fecha) no ocupan cupo
 }
 
-function calcularCarga_() {
+function calcularCarga_(reservas) {
   var carga = {};
-  leerReservas_().forEach(function (r) {
+  (reservas || leerReservas_()).forEach(function (r) {
     var peso = pesoDe_(r);
     if (!peso) return;
     var fecha = tieneHorario_(r) ? r.fecha_cita : r.fecha_solicitada;
@@ -327,22 +327,25 @@ function exigirAdmin_() {
 
 function panelDatos() {
   exigirAdmin_();
-  var reservas = leerReservas_().map(function (r) {
-    var o = {};
-    Object.keys(r).forEach(function (k) {
-      o[k] = r[k] instanceof Date ? r[k].toISOString() : r[k];
-    });
-    return o;
-  }).reverse();
+  var todas = leerReservas_(); // una sola lectura de la hoja para todo el panel
+  var reservas = todas.map(reservaPlana_).reverse();
   // Agenda de Google Calendar: 2 semanas atrás y 4 meses adelante (el panel pide otros rangos con agenda()).
   var hoy = new Date();
   var desde = Utilities.formatDate(new Date(hoy.getTime() - 14 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
   var hasta = Utilities.formatDate(new Date(hoy.getTime() + 120 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
   return {
-    reservas: reservas, carga: calcularCarga_(), cupo: CONFIG.CUPO_POR_FRANJA,
+    reservas: reservas, cupo: CONFIG.CUPO_POR_FRANJA,
+    // Reglas de cupo para que el panel recalcule al instante sin esperar al servidor.
+    reglas: { peso: CONFIG.PESO_PAGO_POR_VALIDAR, manana: CONFIG.HORA_MANANA, tarde: CONFIG.HORA_TARDE, largo: CONFIG.HORAS_SERVICIO_LARGO },
     hoy: Utilities.formatDate(hoy, CONFIG.ZONA, 'yyyy-MM-dd'),
-    agenda: agenda_(desde, hasta), agendaDesde: desde, agendaHasta: hasta
+    agenda: agenda_(desde, hasta, todas), agendaDesde: desde, agendaHasta: hasta
   };
+}
+
+function reservaPlana_(r) {
+  var o = {};
+  Object.keys(r).forEach(function (k) { o[k] = r[k] instanceof Date ? r[k].toISOString() : r[k]; });
+  return o;
 }
 
 /** Eventos del calendario entre dos fechas 'yyyy-MM-dd' (incluye los que el admin crea a mano en Calendar). */
@@ -351,34 +354,36 @@ function agenda(desde, hasta) {
   return agenda_(desde, hasta);
 }
 
-function agenda_(desde, hasta) {
+function agenda_(desde, hasta, reservas) {
   var porEvento = {};
-  leerReservas_().forEach(function (r) { if (r.evento_id) porEvento[r.evento_id] = r; });
+  (reservas || leerReservas_()).forEach(function (r) { if (r.evento_id) porEvento[r.evento_id] = r; });
   var f = function (d, p) { return Utilities.formatDate(d, CONFIG.ZONA, p); };
   return CalendarApp.getDefaultCalendar().getEvents(fechaHora_(desde, '00:00'), fechaHora_(hasta, '23:59')).map(function (ev) {
     var r = porEvento[ev.getId()] || {};
     var s = ev.getStartTime(), e = ev.getEndTime();
     return {
       titulo: ev.getTitle(), fecha: f(s, 'yyyy-MM-dd'), ini: f(s, 'HH:mm'), fin: f(e, 'yyyy-MM-dd') > f(s, 'yyyy-MM-dd') ? '23:59' : f(e, 'HH:mm'),
-      todoElDia: ev.isAllDayEvent(), reserva: r.id || '', estado: r.estado || '', nombre: r.nombre || '', servicio: r.servicio || ''
+      todoElDia: ev.isAllDayEvent(), reserva: r.id || '', estado: r.estado || '', nombre: r.nombre || '', servicio: r.servicio || '',
+      celular: r.celular || ''
     };
   });
 }
+
+/** Respuesta liviana de las acciones: solo la reserva actualizada (el panel ya movió la tarjeta al instante). */
+function respuesta_(r, correo) { return { reserva: reservaPlana_(r), correo: correo }; }
 
 function aprobarPago(id) {
   exigirAdmin_();
   var r = buscarReserva_(id);
   actualizarReserva_(r, { estado: ESTADOS.PAGO_APROBADO, motivo: '' }, 'pago aprobado');
-  enviarCorreo_('pagoAprobado', r);
-  return panelDatos();
+  return respuesta_(r, enviarCorreo_('pagoAprobado', r));
 }
 
 function rechazarPago(id, motivo) {
   exigirAdmin_();
   var r = buscarReserva_(id);
   actualizarReserva_(r, { estado: ESTADOS.PAGO_RECHAZADO, motivo: motivo || '' }, 'pago rechazado: ' + (motivo || 'sin motivo'));
-  enviarCorreo_('pagoRechazado', r, { motivo: motivo || 'No pudimos verificar el depósito con los datos del comprobante.' });
-  return panelDatos();
+  return respuesta_(r, enviarCorreo_('pagoRechazado', r, { motivo: motivo || 'No pudimos verificar el depósito con los datos del comprobante.' }));
 }
 
 function marcarDiaSaturado(id, nota) {
@@ -387,8 +392,7 @@ function marcarDiaSaturado(id, nota) {
   borrarEvento_(r);
   actualizarReserva_(r, { estado: ESTADOS.DIA_SATURADO, motivo: nota || '', evento_id: '', fecha_cita: '', hora_inicio: '', hora_fin: '' },
     'día saturado, contactar para nueva fecha');
-  enviarCorreo_('diaSaturado', r);
-  return panelDatos();
+  return respuesta_(r, enviarCorreo_('diaSaturado', r));
 }
 
 /**
@@ -423,7 +427,7 @@ function agendarCita(id, fecha, horaInicio, horaFin) {
     estado: ESTADOS.CITA_AGENDADA, fecha_cita: fecha, hora_inicio: horaInicio, hora_fin: horaFin,
     evento_id: evento.getId(), recordatorio_enviado: '', motivo: ''
   }, 'agendada en calendario ' + fecha + ' ' + horaInicio + '–' + horaFin);
-  return panelDatos();
+  return respuesta_(r);
 }
 
 /** Paso 2: confirmar la cita ya agendada y enviarle el correo a la clienta. */
@@ -437,8 +441,7 @@ function confirmarCita(id) {
     ev.setColor(CalendarApp.EventColor.GREEN);
   } catch (e) { console.warn('No se pudo actualizar el evento: ' + e); }
   actualizarReserva_(r, { estado: ESTADOS.CITA_CONFIRMADA }, 'cita confirmada a la clienta ' + r.fecha_cita + ' ' + r.hora_inicio + '–' + r.hora_fin);
-  enviarCorreo_('citaConfirmada', r);
-  return panelDatos();
+  return respuesta_(r, enviarCorreo_('citaConfirmada', r));
 }
 
 function tituloEvento_(r) { return r.servicio + ' · ' + r.nombre; }

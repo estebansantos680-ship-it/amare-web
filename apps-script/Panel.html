@@ -8,36 +8,41 @@
 <style>
   :root{ --black:#0B0B0B; --cream:#F5F3EF; --paper:#FBFAF7; --sand:#E9E3D9; --taupe:#B5A48A; --taupe-deep:#8A7A63; --muted:#5F5850; --line:rgba(11,11,11,.12); --ok:#3a6b35; --bad:#9b2c2c; --warn:#8a6a1f; }
   *{ box-sizing:border-box; margin:0; padding:0; }
+  html, body{ overflow-x:hidden; }
   body{ font-family:Montserrat, Arial, sans-serif; font-size:14px; color:var(--black); background:var(--cream); }
-  header{ background:var(--black); color:var(--cream); padding:18px 24px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
-  .logo{ font-family:'Playfair Display', Georgia, serif; font-size:24px; letter-spacing:.08em; }
+  header{ background:var(--black); color:var(--cream); padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:10px; position:sticky; top:0; z-index:5; }
+  .logo{ font-family:'Playfair Display', Georgia, serif; font-size:22px; letter-spacing:.08em; }
   .logo small{ display:block; font-family:Montserrat; font-size:9px; letter-spacing:.3em; color:var(--taupe); }
-  header button{ background:transparent; color:var(--cream); border:1px solid rgba(245,243,239,.4); padding:9px 14px; font:inherit; font-size:11px; letter-spacing:.15em; text-transform:uppercase; cursor:pointer; }
-  main{ max-width:1200px; margin:0 auto; padding:22px 16px 60px; }
-  .tabs{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:18px; }
-  .tab{ border:1px solid var(--line); background:#fff; padding:10px 14px; font:inherit; font-size:12px; font-weight:600; cursor:pointer; }
+  .der{ display:flex; align-items:center; gap:10px; }
+  #sync{ font-size:11px; color:var(--taupe); }
+  #sync.guardando{ color:#f0d9a0; }
+  header button{ background:transparent; color:var(--cream); border:1px solid rgba(245,243,239,.4); padding:9px 12px; font:inherit; font-size:11px; letter-spacing:.15em; text-transform:uppercase; cursor:pointer; }
+  main{ max-width:1200px; margin:0 auto; padding:16px 12px 60px; }
+  .tabs{ display:flex; gap:6px; overflow-x:auto; margin-bottom:16px; padding-bottom:2px; -webkit-overflow-scrolling:touch; }
+  .tab{ flex:none; border:1px solid var(--line); background:#fff; padding:10px 12px; font:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
   .tab.activa{ background:var(--black); color:var(--cream); border-color:var(--black); }
   .tab span{ display:inline-block; min-width:20px; margin-left:6px; padding:1px 6px; border-radius:20px; background:var(--sand); color:var(--black); font-size:11px; text-align:center; }
   .tab.activa span{ background:var(--taupe); }
-  .card{ background:#fff; border:1px solid var(--line); padding:18px; margin-bottom:12px; }
+  .card{ background:#fff; border:1px solid var(--line); padding:16px; margin-bottom:12px; }
   .card.resaltada{ outline:2px solid var(--taupe); }
   .card h3{ font-family:'Playfair Display', Georgia, serif; font-weight:400; font-size:20px; margin-bottom:4px; }
   .meta{ color:var(--muted); font-size:12px; margin-bottom:12px; }
-  .grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px 18px; margin-bottom:14px; }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:8px 18px; margin-bottom:14px; }
+  .grid div{ min-width:0; overflow-wrap:anywhere; }
   .grid div span{ display:block; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--taupe-deep); }
   .acciones{ display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
-  .btn{ border:1px solid var(--black); background:var(--black); color:var(--cream); padding:10px 14px; font:inherit; font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; }
+  .btn{ border:1px solid var(--black); background:var(--black); color:var(--cream); padding:11px 14px; font:inherit; font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; text-decoration:none; display:inline-block; }
   .btn.sec{ background:transparent; color:var(--black); }
   .btn.bad{ background:var(--bad); border-color:var(--bad); }
   .btn.ok{ background:var(--ok); border-color:var(--ok); }
-  .btn:disabled{ opacity:.4; cursor:wait; }
   a.link{ color:var(--black); font-weight:600; }
   label{ font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--taupe-deep); display:block; margin-bottom:4px; }
-  input, textarea{ font:inherit; padding:8px 10px; border:1px solid var(--line); background:#fff; }
+  input, textarea{ font:inherit; font-size:16px; padding:8px 10px; border:1px solid var(--line); background:#fff; max-width:100%; }
   .chip{ display:inline-block; font-size:10px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; padding:4px 8px; border-radius:20px; background:var(--sand); }
   .chip.ok{ background:#e3efe0; color:var(--ok); } .chip.bad{ background:#f5e1e1; color:var(--bad); } .chip.warn{ background:#f5ecd6; color:var(--warn); }
   .vacio{ text-align:center; color:var(--muted); padding:40px; }
-  .aviso{ position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--black); color:var(--cream); padding:12px 18px; font-size:13px; display:none; z-index:10; }
+  .aviso{ position:fixed; left:50%; bottom:16px; transform:translateX(-50%); width:max-content; max-width:calc(100% - 24px); background:var(--black); color:var(--cream); padding:12px 16px; font-size:13px; display:none; z-index:20; }
+  .aviso.error{ background:var(--bad); }
   .historial{ white-space:pre-line; font-size:11px; color:var(--muted); margin-top:10px; }
 
   /* Pasos de agendado */
@@ -53,57 +58,86 @@
   @media (max-width:760px){ .agendar{ grid-template-columns:1fr; } }
 
   /* Agenda */
-  .agenda-top{ display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+  .agenda-top{ display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
   .agenda-top h2{ font-family:'Playfair Display', Georgia, serif; font-weight:400; font-size:22px; }
+  .agenda-top .btn{ padding:9px 12px; }
   .leyenda{ display:flex; gap:12px; flex-wrap:wrap; font-size:11px; color:var(--muted); margin-bottom:10px; }
   .leyenda i{ display:inline-block; width:10px; height:10px; margin-right:5px; vertical-align:-1px; }
-  .semana-scroll{ overflow-x:auto; background:#fff; border:1px solid var(--line); }
-  .semana{ display:grid; min-width:760px; }
-  .dia-cab{ padding:8px 8px 6px; border-left:1px solid var(--line); border-bottom:1px solid var(--line); font-size:12px; min-height:62px; }
-  .dia-cab b{ display:block; text-transform:capitalize; }
+  .semana{ display:grid; background:#fff; border:1px solid var(--line); width:100%; }
+  .dia-cab{ padding:6px; border-left:1px solid var(--line); border-bottom:1px solid var(--line); font-size:12px; min-width:0; position:sticky; top:var(--cab, 62px); background:#fff; z-index:2; }
+  .dia-cab b{ display:block; text-transform:capitalize; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .dia-cab.hoy{ background:var(--sand); }
   .dia-cab small{ display:block; font-size:10px; color:var(--muted); margin-top:2px; }
   .dia-cab small.llena{ color:var(--bad); font-weight:600; }
-  .extras{ border-left:1px solid var(--line); border-bottom:1px solid var(--line); padding:4px; min-height:24px; }
-  .extras div{ font-size:10px; background:var(--cream); border-left:2px solid var(--taupe); padding:2px 4px; margin-bottom:2px; cursor:pointer; }
+  .extras{ border-left:1px solid var(--line); border-bottom:1px solid var(--line); padding:3px; min-height:20px; min-width:0; }
+  .extras div{ font-size:10px; background:var(--cream); border-left:2px solid var(--taupe); padding:2px 4px; margin-bottom:2px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .gutter{ position:relative; }
-  .gutter span{ position:absolute; right:6px; font-size:10px; color:var(--muted); transform:translateY(-50%); }
-  .col{ position:relative; border-left:1px solid var(--line); background-image:repeating-linear-gradient(to bottom, var(--line) 0, var(--line) 1px, transparent 1px, transparent var(--hora)); }
+  .gutter span{ position:absolute; right:4px; font-size:10px; color:var(--muted); transform:translateY(-50%); }
+  .col{ position:relative; min-width:0; border-left:1px solid var(--line); background-image:repeating-linear-gradient(to bottom, var(--line) 0, var(--line) 1px, transparent 1px, transparent var(--hora)); }
   .col.cerrado{ background-color:#f4f2ee; }
   .ev{ position:absolute; overflow:hidden; font-size:10px; line-height:1.25; padding:3px 4px; border-left:3px solid; cursor:pointer; }
-  .ev b{ display:block; font-size:10px; }
+  .ev b{ display:block; font-size:10px; white-space:nowrap; }
   .ev.ok{ background:#e3efe0; border-color:var(--ok); }
   .ev.pend{ background:#f5ecd6; border-color:var(--warn); }
   .ev.ext{ background:#ecebe8; border-color:var(--muted); }
   .ev.prop{ background:repeating-linear-gradient(45deg, rgba(181,164,138,.25) 0 6px, rgba(181,164,138,.45) 6px 12px); border:2px dashed var(--taupe-deep); cursor:default; }
-  .previa{ display:grid; grid-template-columns:44px 1fr; border:1px solid var(--line); background:#fff; }
+  .corto{ display:none; }
+  .previa{ display:grid; grid-template-columns:40px 1fr; border:1px solid var(--line); background:#fff; }
   .previa .titulo{ grid-column:1 / 3; font-size:11px; font-weight:600; padding:6px 8px; border-bottom:1px solid var(--line); text-transform:capitalize; }
+  @media (max-width:640px){
+    .agenda-top h2{ font-size:18px; }
+    .semana{ margin:0 -12px; width:calc(100% + 24px); border-left:0; border-right:0; }
+    .dia-cab{ padding:4px 3px; font-size:11px; }
+    .dia-cab b{ font-size:11px; }
+    .ev{ padding:2px 3px; font-size:9px; border-left-width:2px; }
+    .ev b{ font-size:9px; }
+    .largo{ display:none; } .corto{ display:inline; }
+    .gutter span{ font-size:9px; right:2px; }
+  }
+
+  /* Detalle de una cita (hoja inferior en el celular) */
+  .modal{ position:fixed; inset:0; background:rgba(11,11,11,.45); display:none; align-items:center; justify-content:center; z-index:30; padding:16px; }
+  .modal.abierto{ display:flex; }
+  .hoja{ background:#fff; width:100%; max-width:440px; padding:20px; max-height:90vh; overflow:auto; }
+  .hoja h3{ font-family:'Playfair Display', Georgia, serif; font-weight:400; font-size:21px; margin:8px 0 4px; }
+  .hoja .fila{ font-size:13px; margin-top:8px; }
+  .hoja .fila span{ display:block; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--taupe-deep); }
+  .hoja .acciones{ margin-top:16px; }
+  @media (max-width:640px){
+    .modal{ align-items:flex-end; padding:0; }
+    .hoja{ max-width:none; padding:20px 16px 26px; }
+    .hoja .btn{ flex:1 1 100%; text-align:center; }
+  }
 </style>
 </head>
 <body>
 <header>
   <div class="logo">AMARË<small>PANEL DE RESERVAS</small></div>
-  <button onclick="cargar()">Actualizar</button>
+  <div class="der"><span id="sync"></span><button onclick="cargar()">Actualizar</button></div>
 </header>
 <main>
   <div class="tabs" id="tabs"></div>
   <div id="lista"><p class="vacio">Cargando reservas…</p></div>
 </main>
+<div class="modal" id="modal" onclick="if(event.target===this)cerrarModal()"><div class="hoja" id="hoja"></div></div>
 <div class="aviso" id="aviso"></div>
 
 <script>
-  var DATOS = { reservas: [], carga: {}, cupo: 4, agenda: [], hoy: '' };
+  var DATOS = { reservas: [], cupo: 4, agenda: [], hoy: '', reglas: { peso: .6, manana: [9,13], tarde: [13,18], largo: 4 } };
+  var CARGA = {};          // fecha -> ocupación, calculada aquí mismo para que sea instantánea
   var CACHE = {};          // fecha -> eventos de Google Calendar de ese día
+  var VISTA = [];          // eventos pintados en la agenda (para abrir el detalle)
   var TAB = 'pago_por_validar';
   var SEMANA = '';         // lunes de la semana visible en Agenda
   var PX_HORA = 44, H0 = 8, H1 = 19;
   var DIAS_CERRADOS = [0, 1];
+  var COLA = [], OCUPADO = false; // acciones que se guardan de fondo, una por una y en orden
   var TABS = [
     ['agenda', 'Agenda'],
     ['pago_por_validar', 'Pagos por validar'],
     ['por_agendar', 'Por agendar'],
-    ['cita_confirmada', 'Citas confirmadas'],
-    ['historial', 'Rechazadas / historial']
+    ['cita_confirmada', 'Confirmadas'],
+    ['historial', 'Historial']
   ];
 
   // ---------------------------------------------------------------- utilidades
@@ -115,13 +149,49 @@
   function lunesDe(iso){ var d = fechaD(iso), w = (d.getDay() + 6) % 7; return sumaDias(iso, -w); }
   function fechaLarga(iso){ return iso ? fechaD(iso).toLocaleDateString('es-CR', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : '—'; }
   function fechaCorta(iso){ return fechaD(iso).toLocaleDateString('es-CR', { weekday:'short', day:'numeric', month:'short' }); }
+  function diaCorto(iso){ var d = fechaD(iso); return d.toLocaleDateString('es-CR', { weekday:'short' }).replace('.','') + ' ' + d.getDate(); }
   function horas(hhmm){ var p = String(hhmm).split(':'); return Number(p[0]) + Number(p[1]||0)/60; }
   function h12(hhmm){ var p = String(hhmm).split(':'), h = Number(p[0]); return ((h+11)%12+1) + ':' + (p[1]||'00') + (h<12?' am':' pm'); }
+  function hCorta(hhmm){ var p = String(hhmm).split(':'), h = (Number(p[0])+11)%12+1; return p[1] && p[1] !== '00' ? h + ':' + p[1] : String(h); }
   function sumarHoras(hhmm, hs){
     var t = Math.min(horas(hhmm)*60 + Math.round(hs*60), 23*60+45);
     return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0');
   }
-  function aviso(t){ var a=document.getElementById('aviso'); a.textContent=t; a.style.display='block'; setTimeout(function(){a.style.display='none';},3500); }
+  function nombreCorto(n){ return String(n||'').split(' ')[0]; }
+  var tAviso;
+  function aviso(t, error){
+    var a = document.getElementById('aviso'); a.textContent = t; a.className = 'aviso' + (error ? ' error' : ''); a.style.display = 'block';
+    clearTimeout(tAviso); tAviso = setTimeout(function(){ a.style.display = 'none'; }, error ? 7000 : 3000);
+  }
+  function editando(){ var a = document.activeElement; return a && /INPUT|TEXTAREA|SELECT/.test(a.tagName); }
+
+  // ---------------------------------------------------------------- cupo (mismas reglas que el servidor)
+  function tieneHorario(r){ return (r.estado === 'cita_confirmada' || r.estado === 'cita_agendada') && r.fecha_cita && r.hora_inicio && r.hora_fin; }
+  function pesoDe(r){
+    if (r.estado === 'pago_por_validar') return DATOS.reglas.peso;
+    return (r.estado === 'pago_aprobado' || r.estado === 'cita_agendada' || r.estado === 'cita_confirmada') ? 1 : 0;
+  }
+  function franjasDe(r){
+    var R = DATOS.reglas;
+    if (tieneHorario(r)) {
+      var a = horas(r.hora_inicio), b = horas(r.hora_fin), f = [];
+      if (a < R.manana[1] && b > R.manana[0]) f.push('manana');
+      if (a < R.tarde[1] && b > R.tarde[0]) f.push('tarde');
+      return f.length ? f : ['manana'];
+    }
+    if (Number(r.dur_max_h) > R.largo) return ['manana', 'tarde'];
+    return [r.franja === 'Tarde' ? 'tarde' : 'manana'];
+  }
+  function calcularCarga(){
+    CARGA = {};
+    DATOS.reservas.forEach(function(r){
+      var p = pesoDe(r); if (!p) return;
+      var f = tieneHorario(r) ? r.fecha_cita : r.fecha_solicitada; if (!f) return;
+      CARGA[f] = CARGA[f] || { manana:0, tarde:0, citas:0 };
+      franjasDe(r).forEach(function(x){ CARGA[f][x] += p; });
+      CARGA[f].citas++;
+    });
+  }
 
   // ---------------------------------------------------------------- datos
   function guardarAgenda(desde, hasta, eventos){
@@ -140,7 +210,7 @@
     for (var f = desde; f <= hasta; f = sumaDias(f, 1)) {
       if (!CACHE[f]) {
         google.script.run.withSuccessHandler(function(evs){ guardarAgenda(desde, hasta, evs); listo(); })
-          .withFailureHandler(function(e){ aviso('Error al leer el calendario: ' + e.message); }).agenda(desde, hasta);
+          .withFailureHandler(function(e){ aviso('Error al leer el calendario: ' + e.message, true); }).agenda(desde, hasta);
         return false;
       }
     }
@@ -152,6 +222,14 @@
       return (r.estado === 'pago_por_validar' || r.estado === 'pago_aprobado') && r.fecha_solicitada === fecha;
     });
   }
+  // Cambios locales en la agenda (se ven al instante; el servidor confirma después).
+  function quitarEventos(id){ Object.keys(CACHE).forEach(function(f){ CACHE[f] = CACHE[f].filter(function(e){ return e.reserva !== id; }); }); }
+  function ponerEvento(r){
+    quitarEventos(r.id);
+    (CACHE[r.fecha_cita] = CACHE[r.fecha_cita] || []).push({ titulo: r.servicio + ' · ' + r.nombre, fecha: r.fecha_cita, ini: r.hora_inicio, fin: r.hora_fin,
+      reserva: r.id, estado: r.estado, nombre: r.nombre, servicio: r.servicio, celular: r.celular });
+  }
+  function estadoEvento(id, estado){ Object.keys(CACHE).forEach(function(f){ CACHE[f].forEach(function(e){ if (e.reserva === id) e.estado = estado; }); }); }
 
   // ---------------------------------------------------------------- pestañas
   function enTab(r, tab){
@@ -165,16 +243,18 @@
       return '<button class="tab' + (TAB===t[0]?' activa':'') + '" onclick="irTab(\'' + t[0] + '\')">' + t[1] + n + '</button>';
     }).join('');
   }
-  function irTab(t){ TAB = t; pintar(); }
+  function irTab(t){ TAB = t; pintar(); window.scrollTo(0, 0); }
   function pintar(){
+    calcularCarga();
     pintarTabs();
     if (TAB === 'agenda') return pintarAgenda();
     var lista = DATOS.reservas.filter(function(r){ return enTab(r, TAB); });
     if (TAB === 'cita_confirmada') lista.sort(function(a,b){ return (a.fecha_cita + a.hora_inicio).localeCompare(b.fecha_cita + b.hora_inicio); });
     document.getElementById('lista').innerHTML = lista.length ? lista.map(tarjeta).join('') : '<p class="vacio">No hay reservas en esta sección.</p>';
-    lista.forEach(function(r){ if (document.getElementById('pv-' + r.id)) pintarPrevia(r.id); });
+    lista.forEach(function(r){ var f = document.getElementById('f-' + r.id); if (f && !f.classList.contains('oculto')) pintarPrevia(r.id); });
   }
   function irAReserva(id){
+    cerrarModal();
     var r = reservaPorId(id); if (!r) return;
     TAB = TABS.map(function(t){ return t[0]; }).filter(function(t){ return t !== 'agenda' && enTab(r, t); })[0] || 'historial';
     pintar();
@@ -201,28 +281,28 @@
   }
 
   function columna(fecha, evs, propuesta){
-    var todos = evs.filter(function(e){ return !e.todoElDia; }).map(function(e){ return Object.assign({}, e); });
-    if (propuesta) todos.push({ ini: propuesta.ini, fin: propuesta.fin, prop: true, titulo: 'Esta cita' });
-    carriles(todos);
+    var todos = evs.filter(function(e){ return !e.todoElDia; });
+    if (propuesta) todos = todos.concat([{ ini: propuesta.ini, fin: propuesta.fin, prop: true, titulo: 'Esta cita' }]);
+    todos = carriles(todos);
     var cerrado = DIAS_CERRADOS.indexOf(fechaD(fecha).getDay()) >= 0;
     var h = '<div class="col' + (cerrado ? ' cerrado' : '') + '" style="--hora:' + PX_HORA + 'px;height:' + ((H1-H0)*PX_HORA) + 'px">';
     todos.forEach(function(e){
       var a = Math.max(horas(e.ini), H0), b = Math.min(Math.max(horas(e.fin), horas(e.ini) + .25), H1);
       var top = (a - H0) * PX_HORA, alto = Math.max((b - a) * PX_HORA - 2, 16);
       var ancho = 100 / e._n, izq = ancho * e._l;
-      var texto = e.prop ? 'Esta cita' : (e.nombre ? esc(e.servicio) + ' · ' + esc(e.nombre) : esc(e.titulo));
-      var tip = h12(e.ini) + '–' + h12(e.fin) + ' · ' + (e.prop ? 'Esta cita (propuesta)' : (e.nombre ? e.servicio + ' · ' + e.nombre : e.titulo)) +
-        (e.estado === 'cita_agendada' ? ' · falta confirmar a la clienta' : '');
-      h += '<div class="ev ' + (e.prop ? 'prop' : claseEvento(e)) + '" title="' + esc(tip) + '"' +
-        (e.reserva ? ' onclick="irAReserva(\'' + e.reserva + '\')"' : '') +
-        ' style="top:' + top + 'px;height:' + alto + 'px;left:calc(' + izq + '% + 2px);width:calc(' + ancho + '% - 4px)">' +
-        '<b>' + h12(e.ini) + '–' + h12(e.fin) + '</b>' + texto + '</div>';
+      var n = VISTA.push(e) - 1;
+      var largo = e.prop ? 'Esta cita' : (e.nombre ? esc(e.servicio) + ' · ' + esc(e.nombre) : esc(e.titulo));
+      var corto = e.prop ? 'Esta' : esc(e.nombre ? nombreCorto(e.nombre) : e.titulo);
+      h += '<div class="ev ' + (e.prop ? 'prop' : claseEvento(e)) + '"' + (e.prop ? '' : ' onclick="verEvento(' + n + ')"') +
+        ' style="top:' + top + 'px;height:' + alto + 'px;left:calc(' + izq + '% + 1px);width:calc(' + ancho + '% - 2px)">' +
+        '<b><span class="largo">' + h12(e.ini) + '–' + h12(e.fin) + '</span><span class="corto">' + hCorta(e.ini) + '–' + hCorta(e.fin) + '</span></b>' +
+        '<span class="largo">' + largo + '</span><span class="corto">' + corto + '</span></div>';
     });
     return h + '</div>';
   }
   function gutter(){
     var h = '<div class="gutter" style="height:' + ((H1-H0)*PX_HORA) + 'px">';
-    for (var i = H0 + 1; i < H1; i++) h += '<span style="top:' + ((i-H0)*PX_HORA) + 'px">' + h12(i + ':00').replace(':00','') + '</span>';
+    for (var i = H0 + 1; i < H1; i++) h += '<span style="top:' + ((i-H0)*PX_HORA) + 'px">' + hCorta(i + ':00') + (i < 12 ? 'a' : 'p') + '</span>';
     return h + '</div>';
   }
   function ajustarHoras(evs){
@@ -235,6 +315,7 @@
     var desde = SEMANA, hasta = sumaDias(SEMANA, 6);
     var cont = document.getElementById('lista');
     if (!asegurarAgenda(desde, hasta, pintarAgenda)) { cont.innerHTML = '<p class="vacio">Leyendo el calendario…</p>'; return; }
+    VISTA = [];
     var dias = [];
     for (var i = 0; i < 7; i++) {
       var f = sumaDias(desde, i);
@@ -245,43 +326,68 @@
     dias.forEach(function(f){ todos = todos.concat(CACHE[f] || []); });
     ajustarHoras(todos);
 
-    var cols = '52px repeat(' + dias.length + ', minmax(120px, 1fr))';
     var h = '<div class="agenda-top"><h2>' + fechaCorta(desde) + ' – ' + fechaCorta(hasta) + '</h2><div class="acciones">' +
-      '<button class="btn sec" onclick="moverSemana(-7)">‹ Anterior</button>' +
+      '<button class="btn sec" onclick="moverSemana(-7)">‹</button>' +
       '<button class="btn sec" onclick="SEMANA=lunesDe(DATOS.hoy);pintarAgenda()">Hoy</button>' +
-      '<button class="btn sec" onclick="moverSemana(7)">Siguiente ›</button></div></div>' +
+      '<button class="btn sec" onclick="moverSemana(7)">›</button></div></div>' +
       '<div class="leyenda"><span><i style="background:#e3efe0;border-left:3px solid var(--ok)"></i>Confirmada</span>' +
-      '<span><i style="background:#f5ecd6;border-left:3px solid var(--warn)"></i>En calendario, falta confirmar</span>' +
-      '<span><i style="background:#ecebe8;border-left:3px solid var(--muted)"></i>Otro evento de Google Calendar</span>' +
-      '<span>Se actualiza sola cada minuto · clic en una cita para abrirla</span></div>' +
-      '<div class="semana-scroll"><div class="semana" style="grid-template-columns:' + cols + '">';
+      '<span><i style="background:#f5ecd6;border-left:3px solid var(--warn)"></i>Falta confirmar</span>' +
+      '<span><i style="background:#ecebe8;border-left:3px solid var(--muted)"></i>Otro evento</span></div>' +
+      '<div class="semana" style="grid-template-columns:34px repeat(' + dias.length + ', minmax(0, 1fr))">';
 
     h += '<div class="dia-cab" style="border-left:0"></div>';
     dias.forEach(function(f){
-      var c = DATOS.carga[f], evs = (CACHE[f] || []).filter(function(e){ return !e.todoElDia; });
+      var c = CARGA[f];
       var lleno = c && c.manana >= DATOS.cupo && c.tarde >= DATOS.cupo;
-      h += '<div class="dia-cab' + (f === DATOS.hoy ? ' hoy' : '') + '"><b>' + fechaCorta(f) + '</b>' +
-        '<small>' + evs.length + ' en calendario</small>' +
-        (c ? '<small class="' + (lleno ? 'llena' : '') + '">Cupo M ' + c.manana.toFixed(1) + '/' + DATOS.cupo + ' · T ' + c.tarde.toFixed(1) + '/' + DATOS.cupo + '</small>' : '') + '</div>';
+      h += '<div class="dia-cab' + (f === DATOS.hoy ? ' hoy' : '') + '"><b><span class="largo">' + fechaCorta(f) + '</span><span class="corto">' + diaCorto(f) + '</span></b>' +
+        (c ? '<small class="' + (lleno ? 'llena' : '') + '"><span class="largo">Cupo M ' + c.manana.toFixed(1) + '/' + DATOS.cupo + ' · T ' + c.tarde.toFixed(1) + '/' + DATOS.cupo + '</span>' +
+             '<span class="corto">M' + (+c.manana.toFixed(1)) + ' T' + (+c.tarde.toFixed(1)) + '</span></small>' : '<small>Libre</small>') + '</div>';
     });
     h += '<div class="extras" style="border-left:0"></div>';
     dias.forEach(function(f){
       h += '<div class="extras">' +
         (CACHE[f] || []).filter(function(e){ return e.todoElDia; }).map(function(e){ return '<div title="Todo el día">' + esc(e.titulo) + '</div>'; }).join('') +
         sinHora(f).map(function(r){
-          return '<div onclick="irAReserva(\'' + r.id + '\')" title="Solicitada, todavía sin hora">Sin hora · ' + esc(r.nombre) + ' · ' + esc(r.franja) +
-            (r.estado === 'pago_por_validar' ? ' (pago por validar)' : '') + '</div>';
+          return '<div onclick="irAReserva(\'' + r.id + '\')" title="Solicitada, todavía sin hora">Sin hora · ' + esc(nombreCorto(r.nombre)) + '</div>';
         }).join('') + '</div>';
     });
     h += gutter();
     dias.forEach(function(f){ h += columna(f, CACHE[f] || []); });
-    cont.innerHTML = h + '</div></div>';
+    cont.innerHTML = h + '</div><p class="nota">Se actualiza sola cada minuto. Toca una cita para ver el detalle.</p>';
   }
   function moverSemana(n){ SEMANA = sumaDias(SEMANA, n); pintarAgenda(); }
 
+  // ---------------------------------------------------------------- detalle de una cita
+  function verEvento(n){
+    var e = VISTA[n]; if (!e) return;
+    var r = e.reserva ? reservaPorId(e.reserva) : null;
+    var h = '';
+    if (r) {
+      h = chipEstado(r.estado) + '<h3>' + esc(r.nombre) + '</h3>' +
+        '<div class="fila"><span>Cuándo</span>' + fechaLarga(e.fecha) + ' · ' + h12(e.ini) + '–' + h12(e.fin) + '</div>' +
+        '<div class="fila"><span>Servicio</span>' + esc(r.servicio) + ' · ' + esc(r.categoria) + ' · largo ' + esc(r.largo) + '</div>' +
+        '<div class="fila"><span>Depósito</span>' + (Number(r.deposito)>0 ? colones(r.deposito) : 'No requiere') + '</div>' +
+        (r.comentarios ? '<div class="fila"><span>Comentarios</span>' + esc(r.comentarios) + '</div>' : '') +
+        '<div class="acciones">' +
+          (r.estado === 'cita_agendada' ? '<button class="btn ok" onclick="cerrarModal();confirmar(\'' + r.id + '\')">Confirmar y enviar correo</button>' : '') +
+          '<a class="btn sec" href="https://wa.me/' + String(r.celular).replace(/\D/g,'') + '" target="_blank">WhatsApp</a>' +
+          '<button class="btn sec" onclick="irAReserva(\'' + r.id + '\')">Ver reserva</button>' +
+          '<button class="btn sec" onclick="cerrarModal()">Cerrar</button>' +
+        '</div>';
+    } else {
+      h = '<span class="chip">Google Calendar</span><h3>' + esc(e.titulo) + '</h3>' +
+        '<div class="fila"><span>Cuándo</span>' + fechaLarga(e.fecha) + ' · ' + h12(e.ini) + '–' + h12(e.fin) + '</div>' +
+        '<p class="nota">Evento creado directamente en Google Calendar.</p>' +
+        '<div class="acciones"><button class="btn sec" onclick="cerrarModal()">Cerrar</button></div>';
+    }
+    document.getElementById('hoja').innerHTML = h;
+    document.getElementById('modal').classList.add('abierto');
+  }
+  function cerrarModal(){ document.getElementById('modal').classList.remove('abierto'); }
+
   // ---------------------------------------------------------------- tarjetas
   function textoCarga(fecha){
-    var c = DATOS.carga[fecha];
+    var c = CARGA[fecha];
     if (!c) return '<div class="carga">Cupo en línea de ese día: libre.</div>';
     var lleno = c.manana >= DATOS.cupo && c.tarde >= DATOS.cupo;
     return '<div class="carga' + (lleno?' llena':'') + '">Cupo en línea de ese día: mañana ' + c.manana.toFixed(1) + '/' + DATOS.cupo +
@@ -305,7 +411,7 @@
         '<div><label>Inicio</label><input type="time" id="hi-' + r.id + '" value="' + ini + '" step="900" oninput="pintarPrevia(\'' + r.id + '\')"></div>' +
         '<div><label>Fin</label><input type="time" id="hf-' + r.id + '" value="' + fin + '" step="900" oninput="pintarPrevia(\'' + r.id + '\')"></div>' +
       '</div><div id="cg-' + r.id + '">' + textoCarga(fecha) + '</div>' +
-      '<div class="acciones"><button class="btn" onclick="agendar(this,\'' + r.id + '\')">Poner en Google Calendar</button></div>' +
+      '<div class="acciones"><button class="btn" onclick="agendar(\'' + r.id + '\')">Poner en Google Calendar</button></div>' +
       '<p class="nota">Todavía no se le avisa a la clienta: primero revisa cómo queda el día' +
         (r.estado === 'cita_confirmada' ? '. Después de moverla tendrás que confirmarla de nuevo para enviarle la nueva hora.' : '.') + '</p>' +
       '</div><div id="pv-' + r.id + '"></div></div></div>';
@@ -332,21 +438,21 @@
 
     if (r.estado === 'pago_por_validar') {
       h += '<div class="acciones">' +
-        '<button class="btn" onclick="accion(this,\'aprobarPago\',\'' + r.id + '\',\'Pago aprobado. Se envió el correo a la clienta.\')">Aprobar pago</button>' +
-        '<button class="btn bad" onclick="rechazar(this,\'' + r.id + '\')">Rechazar pago</button></div>';
+        '<button class="btn" onclick="aprobar(\'' + r.id + '\')">Aprobar pago</button>' +
+        '<button class="btn bad" onclick="rechazar(\'' + r.id + '\')">Rechazar pago</button></div>';
     }
     if (r.estado === 'pago_aprobado' || r.estado === 'dia_saturado') {
       h += formAgendar(r, true);
-      if (r.estado === 'pago_aprobado') h += '<div class="acciones" style="margin-top:10px"><button class="btn sec" onclick="saturado(this,\'' + r.id + '\')">Día saturado · coordinar otra fecha</button></div>';
+      if (r.estado === 'pago_aprobado') h += '<div class="acciones" style="margin-top:10px"><button class="btn sec" onclick="saturado(\'' + r.id + '\')">Día saturado · coordinar otra fecha</button></div>';
     }
     if (r.estado === 'cita_agendada') {
       h += '<div class="paso"><h4>Paso 2 · Confirmar a la clienta</h4>' +
         '<div class="en-cal">Ya está en Google Calendar el <b>' + fechaLarga(r.fecha_cita) + '</b>, de ' + h12(r.hora_inicio) + ' a ' + h12(r.hora_fin) +
         '. Si el día se ve bien, confírmala y le llega el correo con la hora.</div>' +
         '<div class="acciones">' +
-          '<button class="btn ok" onclick="accion(this,\'confirmarCita\',\'' + r.id + '\',\'Cita confirmada. Se envió el correo a la clienta.\')">Confirmar cita y enviar correo</button>' +
+          '<button class="btn ok" onclick="confirmar(\'' + r.id + '\')">Confirmar cita y enviar correo</button>' +
           '<button class="btn sec" onclick="abrir(\'' + r.id + '\')">Cambiar fecha u hora</button>' +
-          '<button class="btn sec" onclick="saturado(this,\'' + r.id + '\')">Día saturado · coordinar otra fecha</button>' +
+          '<button class="btn sec" onclick="saturado(\'' + r.id + '\')">Día saturado</button>' +
         '</div></div>' + formAgendar(r, false);
     }
     if (r.estado === 'cita_confirmada') {
@@ -373,28 +479,76 @@
       ' en calendario' + (cerrado ? ' · día cerrado' : '') + '</div>' + gutter() + columna(f, evs, prop) + '</div>';
   }
 
-  // ---------------------------------------------------------------- acciones
-  function ejecutar(btn, fn, args, ok){
-    btn.disabled = true;
-    var runner = google.script.run.withSuccessHandler(function(d){ recibir(d); aviso(ok); })
-      .withFailureHandler(function(e){ btn.disabled = false; aviso('Error: ' + e.message); });
-    runner[fn].apply(runner, args);
+  // ---------------------------------------------------------------- acciones: al instante en pantalla, guardado de fondo
+  /**
+   * Aplica el cambio en pantalla de inmediato y lo manda al servidor en una cola (una acción a la vez,
+   * para que nunca se pisen). Si el servidor falla, se avisa y se recarga el panel con los datos reales.
+   */
+  function accion(id, fn, args, cambios, textoYa, textoListo){
+    var r = reservaPorId(id); if (!r) return;
+    Object.keys(cambios).forEach(function(k){ r[k] = cambios[k]; });
+    if (r.estado === 'cita_agendada' && cambios.fecha_cita) ponerEvento(r);
+    else if (cambios.estado === 'cita_confirmada') estadoEvento(id, 'cita_confirmada');
+    else if (cambios.estado === 'dia_saturado') quitarEventos(id);
+    pintar();
+    aviso(textoYa);
+    COLA.push({ id: id, fn: fn, args: args, textoListo: textoListo });
+    procesarCola();
   }
-  function accion(btn, fn, id, ok){ ejecutar(btn, fn, [id], ok); }
-  function rechazar(btn, id){
+  function procesarCola(){
+    pintarSync();
+    if (OCUPADO || !COLA.length) return;
+    OCUPADO = true;
+    var t = COLA.shift();
+    var run = google.script.run
+      .withSuccessHandler(function(res){
+        var r = reservaPorId(t.id);
+        if (r && res && res.reserva) Object.keys(res.reserva).forEach(function(k){ r[k] = res.reserva[k]; });
+        OCUPADO = false;
+        if (res && res.correo === false) aviso('Guardado, pero el correo a la clienta NO salió. Revisa EmailJS.', true);
+        else if (t.textoListo) aviso(t.textoListo);
+        if (!editando() && !COLA.length) pintar();
+        procesarCola();
+      })
+      .withFailureHandler(function(e){
+        OCUPADO = false;
+        COLA = [];
+        aviso('No se pudo guardar: ' + e.message + '. Se recargaron los datos reales.', true);
+        cargar();
+        pintarSync();
+      });
+    run[t.fn].apply(run, t.args);
+  }
+  function pintarSync(){
+    var s = document.getElementById('sync'), n = COLA.length + (OCUPADO ? 1 : 0);
+    s.textContent = n ? 'Guardando…' : '';
+    s.className = n ? 'guardando' : '';
+  }
+  window.addEventListener('beforeunload', function(e){ if (COLA.length || OCUPADO) { e.preventDefault(); e.returnValue = ''; } });
+
+  function aprobar(id){
+    accion(id, 'aprobarPago', [id], { estado: 'pago_aprobado', motivo: '' }, 'Pago aprobado. Enviando correo…', 'Correo "pago confirmado" enviado ✓');
+  }
+  function rechazar(id){
     var motivo = prompt('Motivo del rechazo (se le envía a la clienta):', 'El monto o la descripción del SINPE no coinciden con la reserva.');
     if (motivo === null) return;
-    ejecutar(btn, 'rechazarPago', [id, motivo], 'Pago rechazado. Se liberó el espacio y se avisó a la clienta.');
+    accion(id, 'rechazarPago', [id, motivo], { estado: 'pago_rechazado', motivo: motivo }, 'Pago rechazado. Enviando correo…', 'Correo "pago rechazado" enviado ✓');
   }
-  function saturado(btn, id){
+  function saturado(id){
     if (!confirm('¿Marcar como día saturado? Se quita del calendario (si estaba) y se le envía el correo para coordinar otra fecha por WhatsApp.')) return;
-    ejecutar(btn, 'marcarDiaSaturado', [id, ''], 'Correo de día saturado enviado.');
+    accion(id, 'marcarDiaSaturado', [id, ''], { estado: 'dia_saturado', evento_id: '', fecha_cita: '', hora_inicio: '', hora_fin: '' },
+      'Marcada como día saturado. Enviando correo…', 'Correo "día saturado" enviado ✓');
   }
-  function agendar(btn, id){
+  function agendar(id){
     var f = document.getElementById('fe-' + id).value, hi = document.getElementById('hi-' + id).value, hf = document.getElementById('hf-' + id).value;
-    if (!f || !hi || !hf) return aviso('Completa fecha, inicio y fin.');
-    if (horas(hf) <= horas(hi)) return aviso('La hora de fin debe ser posterior a la de inicio.');
-    ejecutar(btn, 'agendarCita', [id, f, hi, hf], 'Puesta en Google Calendar. Revisa el día y confírmala.');
+    if (!f || !hi || !hf) return aviso('Completa fecha, inicio y fin.', true);
+    if (horas(hf) <= horas(hi)) return aviso('La hora de fin debe ser posterior a la de inicio.', true);
+    document.activeElement && document.activeElement.blur();
+    accion(id, 'agendarCita', [id, f, hi, hf], { estado: 'cita_agendada', fecha_cita: f, hora_inicio: hi, hora_fin: hf },
+      'Puesta en el calendario. Revisa el día y confírmala.', 'Evento guardado en Google Calendar ✓');
+  }
+  function confirmar(id){
+    accion(id, 'confirmarCita', [id], { estado: 'cita_confirmada' }, 'Cita confirmada. Enviando correo…', 'Correo "cita confirmada" enviado ✓');
   }
 
   function cargar(){
@@ -402,8 +556,11 @@
       .withFailureHandler(function(e){ document.getElementById('lista').innerHTML = '<p class="vacio">' + esc(e.message) + '</p>'; })
       .panelDatos();
   }
-  // La agenda se refresca sola cada minuto (solo en esa pestaña, para no borrar formularios a medio llenar).
-  setInterval(function(){ if (TAB === 'agenda' && !document.hidden) cargar(); }, 60000);
+  // La agenda se refresca sola cada minuto (solo en esa pestaña y sin acciones pendientes).
+  setInterval(function(){ if (TAB === 'agenda' && !document.hidden && !COLA.length && !OCUPADO) cargar(); }, 60000);
+  // Los encabezados de los días se quedan pegados justo debajo del header (su alto cambia en el celular).
+  function medirHeader(){ document.documentElement.style.setProperty('--cab', document.querySelector('header').offsetHeight + 'px'); }
+  window.addEventListener('resize', medirHeader); medirHeader();
   cargar();
 </script>
 </body>
