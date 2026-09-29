@@ -83,7 +83,7 @@ function instalar() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'enviarRecordatorios') ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('enviarRecordatorios').timeBased().everyHours(1).create();
+  ScriptApp.newTrigger('enviarRecordatorios').timeBased().everyMinutes(15).create(); // el recordatorio sale entre 24 h y 23 h 45 min antes
   Logger.log('Listo. Hoja: ' + hoja.getParent().getUrl());
 }
 
@@ -451,7 +451,7 @@ function borrarEvento_(r) {
   try { CalendarApp.getDefaultCalendar().getEventById(r.evento_id).deleteEvent(); } catch (e) { /* ya no existe */ }
 }
 
-// ------------------------------------------------------------------ Recordatorio 24 h (disparador cada hora)
+// ------------------------------------------------------------------ Recordatorio 24 h (disparador cada 15 minutos)
 function enviarRecordatorios() {
   var ahora = new Date().getTime();
   leerReservas_().forEach(function (r) {

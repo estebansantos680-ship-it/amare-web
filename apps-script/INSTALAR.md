@@ -11,7 +11,7 @@ Proyecto: **Amarë Reservas** (script.google.com, cuenta facturas@amarecr.com).
 1. Crear el proyecto en script.google.com con facturas@ y pegar los 3 archivos
    (para ver `appsscript.json`: Configuración del proyecto → "Mostrar el archivo de manifiesto").
 2. Ejecutar `instalar` una vez y autorizar. Crea la hoja "Amarë · Reservas", la carpeta
-   "Amarë · Comprobantes de pago" y el disparador horario de `enviarRecordatorios`.
+   "Amarë · Comprobantes de pago" y el disparador de `enviarRecordatorios` (cada 15 minutos).
 3. Implementar → Nueva implementación → Aplicación web, **dos veces**:
    - **API pública**: ejecutar como "Yo", acceso "Cualquiera". Su URL va en `API_URL` de `js/booking.js`.
    - **Panel**: ejecutar como "Yo", acceso "Solo yo". Su URL va en `CONFIG.PANEL_URL` y en `admin.html`.
