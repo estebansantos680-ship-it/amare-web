@@ -25,6 +25,10 @@
   var ENDPOINT_NEGOCIO_ADJUNTOS = 'https://formsubmit.co/facturas@amarecr.com'; // admite comprobante adjunto
   var ENDPOINT_CLIENTE = 'https://formsubmit.co/ajax/confirmaciones@amarecr.com';
 
+  // Servidor de reservas (Google Apps Script, publicación "API pública"). Ver apps-script/INSTALAR.md.
+  // Vacío = se usa el flujo anterior (FormSubmit + EmailJS desde el navegador).
+  var API_URL = '';
+
   // EmailJS: correo con diseño al cliente (plantilla emails/confirmacion-cliente.html).
   // Plan gratis: 200 envíos/mes → solo se usa para el cliente. Si falta algún dato,
   // el sitio vuelve a usar el correo de texto de FormSubmit (ENDPOINT_CLIENTE).
@@ -263,16 +267,119 @@
   els.toStep3.addEventListener('click', function () {
     if (!state.tier) return;
     goToStep(3);
+    prepararPaso3();
   });
 
   /* ---------- Paso 3: fecha y franja ---------- */
+  // Calendario propio: el selector nativo no permite bloquear días específicos.
+  // Se bloquean días pasados, domingos y lunes, y los días/franjas llenos según
+  // el servidor (API_URL ?accion=disponibilidad). Se consulta de nuevo al entrar
+  // al paso 3, así un rechazo del admin libera el día con solo refrescar.
+  var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  var DIAS_ADELANTE = 90;
+  var bloqueos = {};
+  var mesVisible = null;
+
   function toLocalISODate(d) {
     var y = d.getFullYear();
     var m = String(d.getMonth() + 1).padStart(2, '0');
     var day = String(d.getDate()).padStart(2, '0');
     return y + '-' + m + '-' + day;
   }
-  els.inpFecha.min = toLocalISODate(new Date());
+
+  function cargarBloqueos() {
+    if (!API_URL) return Promise.resolve();
+    return fetch(API_URL + '?accion=disponibilidad&t=' + Date.now())
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (j && j.ok) bloqueos = j.bloqueos || {}; })
+      .catch(function () { /* sin conexión al servidor: solo se bloquean días cerrados */ });
+  }
+
+  function esServicioLargo() {
+    return state.tier && Number(state.tier.durMax) > 4;
+  }
+
+  // Devuelve null si el día se puede elegir, o el motivo del bloqueo.
+  function motivoDiaBloqueado(iso) {
+    var d = new Date(iso + 'T12:00:00');
+    var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    if (d < hoy) return 'pasado';
+    if (d.getDay() === 0 || d.getDay() === 1) return 'cerrado';
+    var limite = new Date(hoy.getTime() + DIAS_ADELANTE * 864e5);
+    if (d > limite) return 'lejos';
+    var b = bloqueos[iso];
+    if (b && ((b.manana && b.tarde) || (esServicioLargo() && (b.manana || b.tarde)))) return 'lleno';
+    return null;
+  }
+
+  function renderCalendario() {
+    var cont = document.getElementById('calendario');
+    if (!cont) return;
+    var hoy = new Date();
+    if (!mesVisible) mesVisible = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    var y = mesVisible.getFullYear(), m = mesVisible.getMonth();
+    var primero = new Date(y, m, 1);
+    var diasMes = new Date(y, m + 1, 0).getDate();
+    var desfase = (primero.getDay() + 6) % 7; // la semana inicia en lunes
+    var minMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    var tope = new Date(hoy.getTime() + DIAS_ADELANTE * 864e5);
+    var maxMes = new Date(tope.getFullYear(), tope.getMonth(), 1);
+
+    var h = '<div class="cal-head">' +
+      '<button type="button" class="cal-nav" data-mes="-1"' + (primero <= minMes ? ' disabled' : '') + ' aria-label="Mes anterior">‹</button>' +
+      '<strong>' + MESES[m].charAt(0).toUpperCase() + MESES[m].slice(1) + ' ' + y + '</strong>' +
+      '<button type="button" class="cal-nav" data-mes="1"' + (primero >= maxMes ? ' disabled' : '') + ' aria-label="Mes siguiente">›</button></div>' +
+      '<div class="cal-grid">' + ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(function (d) { return '<span class="cal-dow">' + d + '</span>'; }).join('');
+    for (var i = 0; i < desfase; i++) h += '<span></span>';
+    for (var dia = 1; dia <= diasMes; dia++) {
+      var iso = toLocalISODate(new Date(y, m, dia));
+      var motivo = motivoDiaBloqueado(iso);
+      var clases = 'cal-dia' + (motivo ? ' off ' + motivo : '') + (state.fecha === iso ? ' selected' : '');
+      var titulo = { cerrado: 'Cerrado', lleno: 'Día lleno', pasado: 'Fecha pasada', lejos: 'Aún no disponible' }[motivo] || 'Disponible';
+      h += '<button type="button" class="' + clases + '" data-fecha="' + iso + '"' + (motivo ? ' disabled' : '') + ' title="' + titulo + '">' + dia + '</button>';
+    }
+    h += '</div><p class="cal-leyenda"><span class="punto libre"></span>Disponible <span class="punto lleno"></span>Lleno <span class="punto cerrado"></span>Cerrado</p>';
+    cont.innerHTML = h;
+  }
+
+  document.addEventListener('click', function (e) {
+    var nav = e.target.closest && e.target.closest('.cal-nav');
+    if (nav && !nav.disabled) {
+      mesVisible = new Date(mesVisible.getFullYear(), mesVisible.getMonth() + Number(nav.getAttribute('data-mes')), 1);
+      renderCalendario();
+      return;
+    }
+    var dia = e.target.closest && e.target.closest('.cal-dia');
+    if (dia && !dia.disabled) {
+      els.inpFecha.value = dia.getAttribute('data-fecha');
+      els.inpFecha.dispatchEvent(new Event('change'));
+      renderCalendario();
+    }
+  });
+
+  function prepararPaso3() {
+    renderCalendario();
+    cargarBloqueos().then(function () {
+      // Si la fecha elegida se llenó mientras tanto, se deselecciona.
+      if (state.fecha && motivoDiaBloqueado(state.fecha)) {
+        els.inpFecha.value = '';
+        els.inpFecha.dispatchEvent(new Event('change'));
+      }
+      renderCalendario();
+      actualizarFranjas();
+    });
+  }
+
+  function actualizarFranjas() {
+    var b = (state.fecha && bloqueos[state.fecha]) || {};
+    els.franjaButtons.forEach(function (btn) {
+      var key = btn.getAttribute('data-franja') === 'Tarde' ? 'tarde' : 'manana';
+      var llena = !!b[key];
+      btn.disabled = llena;
+      btn.classList.toggle('llena', llena);
+      btn.textContent = btn.getAttribute('data-franja') + (llena ? ' · lleno' : '');
+    });
+  }
 
   function resetFranjaSelection() {
     state.franja = null;
@@ -287,22 +394,30 @@
     els.availabilityResult.className = 'availability-result ok';
     els.availabilityResult.textContent =
       '¡Excelente elección! Solicitaremos tu espacio para el ' + fechaLegible(state.fecha).toLowerCase() +
-      ' en la ' + state.franja.toLowerCase() + '. Nuestro equipo te confirma la hora exacta por WhatsApp.';
+      ' en la ' + state.franja.toLowerCase() + '. Nuestro equipo te confirma la hora exacta.';
     els.toStep4.disabled = false;
   }
 
   els.inpFecha.addEventListener('change', function () {
     resetFranjaSelection();
-    if (!els.inpFecha.value) return;
-    var d = new Date(els.inpFecha.value + 'T12:00:00');
-    if (d.getDay() === 0 || d.getDay() === 1) {
-      state.fecha = null;
+    state.fecha = null;
+    if (!els.inpFecha.value) { actualizarFranjas(); return; }
+    var motivo = motivoDiaBloqueado(els.inpFecha.value);
+    if (motivo) {
       els.availabilityResult.hidden = false;
       els.availabilityResult.className = 'availability-result full';
-      els.availabilityResult.textContent = 'Domingos y lunes descansamos. Elige un día de martes a sábado.';
+      els.availabilityResult.textContent = motivo === 'lleno'
+        ? 'Ese día ya está lleno. Elige otra fecha, por favor.'
+        : 'Domingos y lunes descansamos. Elige un día de martes a sábado.';
+      actualizarFranjas();
       return;
     }
     state.fecha = els.inpFecha.value;
+    actualizarFranjas();
+    // Servicios de más de 4 h ocupan mañana y tarde: se preselecciona la mañana.
+    if (esServicioLargo() && !els.franjaButtons[0].disabled) {
+      els.franjaButtons[0].click();
+    }
   });
 
   els.franjaButtons.forEach(function (btn) {
@@ -313,6 +428,7 @@
         els.availabilityResult.textContent = 'Primero elige la fecha de tu cita.';
         return;
       }
+      if (btn.disabled) return;
       els.franjaButtons.forEach(function (b) { b.classList.remove('selected'); });
       btn.classList.add('selected');
       state.franja = btn.getAttribute('data-franja');
@@ -831,6 +947,33 @@
     els.btnConfirmar.classList.add('is-loading');
     els.btnConfirmar.textContent = state.comprobante ? 'Enviando comprobante…' : 'Enviando…';
 
+    // Servidor de reservas (Apps Script): guarda la reserva, el comprobante y envía los correos.
+    if (API_URL) {
+      enviarAlServidor(deposito)
+        .then(function (resp) {
+          if (resp.ok) { mostrarGracias(datosGracias); return; }
+          if (resp.error === 'franja_llena') {
+            els.btnConfirmar.classList.remove('is-loading');
+            els.btnConfirmar.textContent = 'Confirmar reserva';
+            goToStep(3);
+            prepararPaso3();
+            els.availabilityResult.hidden = false;
+            els.availabilityResult.className = 'availability-result full';
+            els.availabilityResult.textContent = 'Justo se llenó ese espacio. Elige otra fecha o franja, por favor.';
+            return;
+          }
+          throw new Error(resp.error || 'respuesta inválida');
+        })
+        .catch(function (err) {
+          if (window.console) console.warn('Servidor de reservas no disponible, se usa el respaldo:', err);
+          flujoRespaldo();
+        });
+      return;
+    }
+    flujoRespaldo();
+
+    function flujoRespaldo() {
+
     function conReintento(endpoint, payload) {
       return enviarCorreo(endpoint, payload)
         .catch(function () { return enviarCorreo(endpoint, payload); })
@@ -871,7 +1014,37 @@
         els.btnConfirmar.textContent = 'Confirmar reserva';
         mostrarErrorPago('No pudimos enviar tu reserva. Revisa tu conexión e inténtalo de nuevo. Si el problema sigue, escríbenos por WhatsApp al 8807-3849.');
       });
+    } // fin flujoRespaldo
   });
+
+  /* ---------- Envío al servidor de reservas (Apps Script) ---------- */
+  function leerBase64(file) {
+    return new Promise(function (resolve, reject) {
+      var lector = new FileReader();
+      lector.onload = function () { resolve(String(lector.result).split(',')[1]); };
+      lector.onerror = reject;
+      lector.readAsDataURL(file);
+    });
+  }
+
+  function enviarAlServidor(deposito) {
+    var s = state.service, c = state.cliente, tier = state.tier;
+    var reserva = {
+      nombre: c.nombre, celular: c.celular, correo: c.correo, comentarios: c.notas || '',
+      categoria: s.categoria, servicio: s.servicio, codigo: s.codigo || '', largo: state.lengthLabel,
+      precio_min: tier.min, precio_max: tier.max, dur_min_h: tier.durMin, dur_max_h: tier.durMax,
+      fecha: state.fecha, franja: state.franja, horario_sugerido: s.horario || '',
+      deposito: deposito.requerido ? deposito.monto : 0,
+      descripcion_sinpe: deposito.requerido ? conceptoPago() : ''
+    };
+    var archivo = state.comprobante ? leerBase64(state.comprobante) : Promise.resolve(null);
+    return archivo.then(function (b64) {
+      var cuerpo = { reserva: reserva };
+      if (b64) cuerpo.comprobante = { base64: b64, tipo: state.comprobante.type, nombre: state.comprobante.name };
+      // text/plain evita la verificación CORS previa, que Apps Script no responde.
+      return fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(cuerpo) });
+    }).then(function (r) { return r.json(); });
+  }
 
   if (!reservaEnviadaAlVolver()) preseleccionarDesdeURL();
 
