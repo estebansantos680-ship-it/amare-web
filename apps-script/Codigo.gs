@@ -22,6 +22,8 @@
 // ------------------------------------------------------------------ Config
 var CONFIG = {
   ADMIN_EMAIL: 'facturas@amarecr.com',
+  // Publicación "Panel admin" (acceso: solo facturas@). La otra publicación es la API pública.
+  PANEL_URL: 'https://script.google.com/a/macros/amarecr.com/s/AKfycbyNGq-K0H7scCaGoJwNtsLFgL7YcKL2q4UHhXm9V01VIWo0rPPoyQJQKNrd1sJ2vLVM/exec',
   ZONA: 'America/Costa_Rica',
   CUPO_POR_FRANJA: 4,          // Pendientes P-011: 4 servicios en la mañana y 4 en la tarde
   PESO_PAGO_POR_VALIDAR: 0.6,  // se asume que ~60% de los comprobantes son reales
@@ -39,6 +41,9 @@ var CONFIG = {
     serviceId: 'service_q9qzz65',
     publicKey: 'Yrbk48Pzaxg_eptQn',
     // IDs de los templates (EmailJS → Email Templates). Vacío = no se envía.
+    // También se pueden poner en Configuración del proyecto → Propiedades de la
+    // secuencia de comandos como TEMPLATE_pagoAprobado, etc. (tienen prioridad y
+    // no requieren volver a publicar).
     templates: {
       solicitud: 'template_nrvafoo',   // 1. Solicitud recibida (ya existe)
       pagoAprobado: '',                // 2. Pago confirmado
@@ -434,7 +439,7 @@ function parametrosCorreo_(r) {
 }
 
 function enviarCorreo_(clave, r, extra) {
-  var template = CONFIG.EMAILJS.templates[clave];
+  var template = PropertiesService.getScriptProperties().getProperty('TEMPLATE_' + clave) || CONFIG.EMAILJS.templates[clave];
   if (!template) { console.warn('Template sin configurar: ' + clave); return false; }
   var params = parametrosCorreo_(r);
   Object.keys(extra || {}).forEach(function (k) { params[k] = extra[k]; });
@@ -458,7 +463,7 @@ function enviarCorreo_(clave, r, extra) {
 
 function avisarAdmin_(r) {
   // URL de la publicación "Panel" (solo cuentas de amarecr.com). Ver INSTALAR.md.
-  var url = PropertiesService.getScriptProperties().getProperty('PANEL_URL') || ScriptApp.getService().getUrl();
+  var url = CONFIG.PANEL_URL;
   var filas = [
     ['Estado', r.estado === ESTADOS.PAGO_POR_VALIDAR ? 'Pago por validar' : 'Sin depósito — por agendar'],
     ['Clienta', r.nombre], ['Celular', r.celular], ['Correo', r.correo],

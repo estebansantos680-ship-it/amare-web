@@ -27,7 +27,7 @@
 
   // Servidor de reservas (Google Apps Script, publicación "API pública"). Ver apps-script/INSTALAR.md.
   // Vacío = se usa el flujo anterior (FormSubmit + EmailJS desde el navegador).
-  var API_URL = '';
+  var API_URL = 'https://script.google.com/macros/s/AKfycbzQPBJ3dz8Q201ef0V-dSdVjXwnNK4jmCOQxbSEZvCzqPlHiYYP6A3p6QXuFTjbEyvX/exec';
 
   // EmailJS: correo con diseño al cliente (plantilla emails/confirmacion-cliente.html).
   // Plan gratis: 200 envíos/mes → solo se usa para el cliente. Si falta algún dato,
