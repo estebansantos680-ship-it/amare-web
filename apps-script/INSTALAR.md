@@ -32,6 +32,10 @@ En Configuración del proyecto → Propiedades del script se pueden poner los ID
 | `TEMPLATE_diaSaturado` | Coordinemos otra fecha |
 | `TEMPLATE_recordatorio` | Recordatorio 24 h antes |
 
+Además, **`EMAILJS_PRIVATE_KEY`** = Private Key de EmailJS (Account → API keys). Es obligatoria porque la cuenta
+tiene "strict mode"; sin ella EmailJS responde 403 y no sale ningún correo a la clienta. Para diagnosticar,
+ejecutar `probarCorreo` desde el editor: envía la última reserva a facturas@ y deja el error en el registro.
+
 Si una propiedad está vacía se usa el valor de `CONFIG.EMAILJS.templates`; si ambos están vacíos, ese correo no se envía.
 El HTML de cada template está en `/emails` (se genera con `tools/generar_correos.py`).
 En cada template: To Email `{{correo}}`, From Name `Amarë Beauty Center`, Reply To `facturas@amarecr.com`.
