@@ -60,6 +60,7 @@ var ESTADOS = {
   PAGO_APROBADO: 'pago_aprobado',
   PAGO_RECHAZADO: 'pago_rechazado',
   DIA_SATURADO: 'dia_saturado',
+  CITA_AGENDADA: 'cita_agendada',     // ya está en Google Calendar, falta confirmarle a la clienta
   CITA_CONFIRMADA: 'cita_confirmada',
   CANCELADA: 'cancelada'
 };
@@ -263,8 +264,12 @@ function actualizarReserva_(r, cambios, nota) {
 }
 
 // ------------------------------------------------------------------ Cupos y disponibilidad
+function tieneHorario_(r) {
+  return (r.estado === ESTADOS.CITA_CONFIRMADA || r.estado === ESTADOS.CITA_AGENDADA) && r.fecha_cita && r.hora_inicio && r.hora_fin;
+}
+
 function franjasQueOcupa_(r) {
-  if (r.estado === ESTADOS.CITA_CONFIRMADA && r.hora_inicio && r.hora_fin) {
+  if (tieneHorario_(r)) {
     var ini = horaNumero_(r.hora_inicio), fin = horaNumero_(r.hora_fin);
     var f = [];
     if (ini < CONFIG.HORA_MANANA[1] && fin > CONFIG.HORA_MANANA[0]) f.push('manana');
@@ -277,7 +282,7 @@ function franjasQueOcupa_(r) {
 
 function pesoDe_(r) {
   if (r.estado === ESTADOS.PAGO_POR_VALIDAR) return CONFIG.PESO_PAGO_POR_VALIDAR;
-  if (r.estado === ESTADOS.PAGO_APROBADO || r.estado === ESTADOS.CITA_CONFIRMADA) return 1;
+  if (r.estado === ESTADOS.PAGO_APROBADO || r.estado === ESTADOS.CITA_AGENDADA || r.estado === ESTADOS.CITA_CONFIRMADA) return 1;
   return 0; // rechazadas, canceladas y "día saturado" (pendiente de nueva fecha) no ocupan cupo
 }
 
@@ -286,7 +291,7 @@ function calcularCarga_() {
   leerReservas_().forEach(function (r) {
     var peso = pesoDe_(r);
     if (!peso) return;
-    var fecha = r.estado === ESTADOS.CITA_CONFIRMADA && r.fecha_cita ? r.fecha_cita : r.fecha_solicitada;
+    var fecha = tieneHorario_(r) ? r.fecha_cita : r.fecha_solicitada;
     if (!fecha) return;
     carga[fecha] = carga[fecha] || { manana: 0, tarde: 0, citas: 0 };
     franjasQueOcupa_(r).forEach(function (f) { carga[fecha][f] += peso; });
@@ -325,7 +330,35 @@ function panelDatos() {
     });
     return o;
   }).reverse();
-  return { reservas: reservas, carga: calcularCarga_(), cupo: CONFIG.CUPO_POR_FRANJA };
+  // Agenda de Google Calendar: 2 semanas atrás y 4 meses adelante (el panel pide otros rangos con agenda()).
+  var hoy = new Date();
+  var desde = Utilities.formatDate(new Date(hoy.getTime() - 14 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
+  var hasta = Utilities.formatDate(new Date(hoy.getTime() + 120 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
+  return {
+    reservas: reservas, carga: calcularCarga_(), cupo: CONFIG.CUPO_POR_FRANJA,
+    hoy: Utilities.formatDate(hoy, CONFIG.ZONA, 'yyyy-MM-dd'),
+    agenda: agenda_(desde, hasta), agendaDesde: desde, agendaHasta: hasta
+  };
+}
+
+/** Eventos del calendario entre dos fechas 'yyyy-MM-dd' (incluye los que el admin crea a mano en Calendar). */
+function agenda(desde, hasta) {
+  exigirAdmin_();
+  return agenda_(desde, hasta);
+}
+
+function agenda_(desde, hasta) {
+  var porEvento = {};
+  leerReservas_().forEach(function (r) { if (r.evento_id) porEvento[r.evento_id] = r; });
+  var f = function (d, p) { return Utilities.formatDate(d, CONFIG.ZONA, p); };
+  return CalendarApp.getDefaultCalendar().getEvents(fechaHora_(desde, '00:00'), fechaHora_(hasta, '23:59')).map(function (ev) {
+    var r = porEvento[ev.getId()] || {};
+    var s = ev.getStartTime(), e = ev.getEndTime();
+    return {
+      titulo: ev.getTitle(), fecha: f(s, 'yyyy-MM-dd'), ini: f(s, 'HH:mm'), fin: f(e, 'yyyy-MM-dd') > f(s, 'yyyy-MM-dd') ? '23:59' : f(e, 'HH:mm'),
+      todoElDia: ev.isAllDayEvent(), reserva: r.id || '', estado: r.estado || '', nombre: r.nombre || '', servicio: r.servicio || ''
+    };
+  });
 }
 
 function aprobarPago(id) {
@@ -347,24 +380,27 @@ function rechazarPago(id, motivo) {
 function marcarDiaSaturado(id, nota) {
   exigirAdmin_();
   var r = buscarReserva_(id);
-  actualizarReserva_(r, { estado: ESTADOS.DIA_SATURADO, motivo: nota || '' }, 'día saturado, contactar para nueva fecha');
+  borrarEvento_(r);
+  actualizarReserva_(r, { estado: ESTADOS.DIA_SATURADO, motivo: nota || '', evento_id: '', fecha_cita: '', hora_inicio: '', hora_fin: '' },
+    'día saturado, contactar para nueva fecha');
   enviarCorreo_('diaSaturado', r);
   return panelDatos();
 }
 
-/** fecha 'yyyy-MM-dd', horaInicio/horaFin 'HH:mm' (el admin decide, puede cruzarse con otras citas) */
-function confirmarCita(id, fecha, horaInicio, horaFin) {
+/**
+ * Paso 1: poner la cita en Google Calendar (sin avisar a la clienta todavía).
+ * fecha 'yyyy-MM-dd', horaInicio/horaFin 'HH:mm'. El admin decide; puede cruzarse con otras citas.
+ * Si la cita ya estaba confirmada y se mueve, vuelve a "agendada" para enviar el correo con la nueva hora.
+ */
+function agendarCita(id, fecha, horaInicio, horaFin) {
   exigirAdmin_();
   var r = buscarReserva_(id);
   var inicio = fechaHora_(fecha, horaInicio);
   var fin = fechaHora_(fecha, horaFin);
   if (!(fin > inicio)) throw new Error('La hora de fin debe ser posterior a la de inicio.');
 
-  var cal = CalendarApp.getDefaultCalendar();
-  if (r.evento_id) {
-    try { cal.getEventById(r.evento_id).deleteEvent(); } catch (e) { /* ya no existe */ }
-  }
-  var evento = cal.createEvent(r.servicio + ' · ' + r.nombre, inicio, fin, {
+  borrarEvento_(r);
+  var evento = CalendarApp.getDefaultCalendar().createEvent('Por confirmar · ' + tituloEvento_(r), inicio, fin, {
     location: CONFIG.DIRECCION,
     description: [
       'Clienta: ' + r.nombre,
@@ -378,12 +414,34 @@ function confirmarCita(id, fecha, horaInicio, horaFin) {
       'Reserva: ' + r.id
     ].filter(String).join('\n')
   });
+  try { evento.setColor(CalendarApp.EventColor.YELLOW); } catch (e) { /* color opcional */ }
   actualizarReserva_(r, {
-    estado: ESTADOS.CITA_CONFIRMADA, fecha_cita: fecha, hora_inicio: horaInicio, hora_fin: horaFin,
+    estado: ESTADOS.CITA_AGENDADA, fecha_cita: fecha, hora_inicio: horaInicio, hora_fin: horaFin,
     evento_id: evento.getId(), recordatorio_enviado: '', motivo: ''
-  }, 'cita confirmada ' + fecha + ' ' + horaInicio + '–' + horaFin);
+  }, 'agendada en calendario ' + fecha + ' ' + horaInicio + '–' + horaFin);
+  return panelDatos();
+}
+
+/** Paso 2: confirmar la cita ya agendada y enviarle el correo a la clienta. */
+function confirmarCita(id) {
+  exigirAdmin_();
+  var r = buscarReserva_(id);
+  if (r.estado !== ESTADOS.CITA_AGENDADA || !r.evento_id) throw new Error('Primero ponga la cita en el calendario.');
+  try {
+    var ev = CalendarApp.getDefaultCalendar().getEventById(r.evento_id);
+    ev.setTitle(tituloEvento_(r));
+    ev.setColor(CalendarApp.EventColor.GREEN);
+  } catch (e) { console.warn('No se pudo actualizar el evento: ' + e); }
+  actualizarReserva_(r, { estado: ESTADOS.CITA_CONFIRMADA }, 'cita confirmada a la clienta ' + r.fecha_cita + ' ' + r.hora_inicio + '–' + r.hora_fin);
   enviarCorreo_('citaConfirmada', r);
   return panelDatos();
+}
+
+function tituloEvento_(r) { return r.servicio + ' · ' + r.nombre; }
+
+function borrarEvento_(r) {
+  if (!r.evento_id) return;
+  try { CalendarApp.getDefaultCalendar().getEventById(r.evento_id).deleteEvent(); } catch (e) { /* ya no existe */ }
 }
 
 // ------------------------------------------------------------------ Recordatorio 24 h (disparador cada hora)

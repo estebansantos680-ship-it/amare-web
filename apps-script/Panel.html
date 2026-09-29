@@ -13,13 +13,14 @@
   .logo{ font-family:'Playfair Display', Georgia, serif; font-size:24px; letter-spacing:.08em; }
   .logo small{ display:block; font-family:Montserrat; font-size:9px; letter-spacing:.3em; color:var(--taupe); }
   header button{ background:transparent; color:var(--cream); border:1px solid rgba(245,243,239,.4); padding:9px 14px; font:inherit; font-size:11px; letter-spacing:.15em; text-transform:uppercase; cursor:pointer; }
-  main{ max-width:1100px; margin:0 auto; padding:22px 16px 60px; }
+  main{ max-width:1200px; margin:0 auto; padding:22px 16px 60px; }
   .tabs{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:18px; }
   .tab{ border:1px solid var(--line); background:#fff; padding:10px 14px; font:inherit; font-size:12px; font-weight:600; cursor:pointer; }
   .tab.activa{ background:var(--black); color:var(--cream); border-color:var(--black); }
   .tab span{ display:inline-block; min-width:20px; margin-left:6px; padding:1px 6px; border-radius:20px; background:var(--sand); color:var(--black); font-size:11px; text-align:center; }
   .tab.activa span{ background:var(--taupe); }
   .card{ background:#fff; border:1px solid var(--line); padding:18px; margin-bottom:12px; }
+  .card.resaltada{ outline:2px solid var(--taupe); }
   .card h3{ font-family:'Playfair Display', Georgia, serif; font-weight:400; font-size:20px; margin-bottom:4px; }
   .meta{ color:var(--muted); font-size:12px; margin-bottom:12px; }
   .grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px 18px; margin-bottom:14px; }
@@ -28,20 +29,55 @@
   .btn{ border:1px solid var(--black); background:var(--black); color:var(--cream); padding:10px 14px; font:inherit; font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; }
   .btn.sec{ background:transparent; color:var(--black); }
   .btn.bad{ background:var(--bad); border-color:var(--bad); }
+  .btn.ok{ background:var(--ok); border-color:var(--ok); }
   .btn:disabled{ opacity:.4; cursor:wait; }
   a.link{ color:var(--black); font-weight:600; }
-  .confirmar{ display:none; border-top:1px solid var(--line); margin-top:14px; padding-top:14px; }
-  .confirmar.abierto{ display:block; }
-  .confirmar .campos{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px; }
   label{ font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--taupe-deep); display:block; margin-bottom:4px; }
   input, textarea{ font:inherit; padding:8px 10px; border:1px solid var(--line); background:#fff; }
-  .carga{ font-size:12px; padding:8px 10px; background:var(--cream); border-left:3px solid var(--taupe); margin-bottom:10px; }
-  .carga.llena{ border-color:var(--bad); }
   .chip{ display:inline-block; font-size:10px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; padding:4px 8px; border-radius:20px; background:var(--sand); }
   .chip.ok{ background:#e3efe0; color:var(--ok); } .chip.bad{ background:#f5e1e1; color:var(--bad); } .chip.warn{ background:#f5ecd6; color:var(--warn); }
   .vacio{ text-align:center; color:var(--muted); padding:40px; }
   .aviso{ position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--black); color:var(--cream); padding:12px 18px; font-size:13px; display:none; z-index:10; }
   .historial{ white-space:pre-line; font-size:11px; color:var(--muted); margin-top:10px; }
+
+  /* Pasos de agendado */
+  .paso{ border-top:1px solid var(--line); margin-top:14px; padding-top:14px; }
+  .paso h4{ font-size:11px; letter-spacing:.16em; text-transform:uppercase; margin-bottom:10px; }
+  .paso.oculto{ display:none; }
+  .agendar{ display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:18px; align-items:start; }
+  .campos{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px; }
+  .carga{ font-size:12px; padding:8px 10px; background:var(--cream); border-left:3px solid var(--taupe); margin-bottom:10px; }
+  .carga.llena{ border-color:var(--bad); }
+  .en-cal{ font-size:13px; padding:10px 12px; background:#f5ecd6; border-left:3px solid var(--warn); margin-bottom:10px; }
+  .nota{ font-size:11px; color:var(--muted); margin-top:8px; }
+  @media (max-width:760px){ .agendar{ grid-template-columns:1fr; } }
+
+  /* Agenda */
+  .agenda-top{ display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+  .agenda-top h2{ font-family:'Playfair Display', Georgia, serif; font-weight:400; font-size:22px; }
+  .leyenda{ display:flex; gap:12px; flex-wrap:wrap; font-size:11px; color:var(--muted); margin-bottom:10px; }
+  .leyenda i{ display:inline-block; width:10px; height:10px; margin-right:5px; vertical-align:-1px; }
+  .semana-scroll{ overflow-x:auto; background:#fff; border:1px solid var(--line); }
+  .semana{ display:grid; min-width:760px; }
+  .dia-cab{ padding:8px 8px 6px; border-left:1px solid var(--line); border-bottom:1px solid var(--line); font-size:12px; min-height:62px; }
+  .dia-cab b{ display:block; text-transform:capitalize; }
+  .dia-cab.hoy{ background:var(--sand); }
+  .dia-cab small{ display:block; font-size:10px; color:var(--muted); margin-top:2px; }
+  .dia-cab small.llena{ color:var(--bad); font-weight:600; }
+  .extras{ border-left:1px solid var(--line); border-bottom:1px solid var(--line); padding:4px; min-height:24px; }
+  .extras div{ font-size:10px; background:var(--cream); border-left:2px solid var(--taupe); padding:2px 4px; margin-bottom:2px; cursor:pointer; }
+  .gutter{ position:relative; }
+  .gutter span{ position:absolute; right:6px; font-size:10px; color:var(--muted); transform:translateY(-50%); }
+  .col{ position:relative; border-left:1px solid var(--line); background-image:repeating-linear-gradient(to bottom, var(--line) 0, var(--line) 1px, transparent 1px, transparent var(--hora)); }
+  .col.cerrado{ background-color:#f4f2ee; }
+  .ev{ position:absolute; overflow:hidden; font-size:10px; line-height:1.25; padding:3px 4px; border-left:3px solid; cursor:pointer; }
+  .ev b{ display:block; font-size:10px; }
+  .ev.ok{ background:#e3efe0; border-color:var(--ok); }
+  .ev.pend{ background:#f5ecd6; border-color:var(--warn); }
+  .ev.ext{ background:#ecebe8; border-color:var(--muted); }
+  .ev.prop{ background:repeating-linear-gradient(45deg, rgba(181,164,138,.25) 0 6px, rgba(181,164,138,.45) 6px 12px); border:2px dashed var(--taupe-deep); cursor:default; }
+  .previa{ display:grid; grid-template-columns:44px 1fr; border:1px solid var(--line); background:#fff; }
+  .previa .titulo{ grid-column:1 / 3; font-size:11px; font-weight:600; padding:6px 8px; border-bottom:1px solid var(--line); text-transform:capitalize; }
 </style>
 </head>
 <body>
@@ -56,59 +92,232 @@
 <div class="aviso" id="aviso"></div>
 
 <script>
-  var DATOS = { reservas: [], carga: {}, cupo: 4 };
+  var DATOS = { reservas: [], carga: {}, cupo: 4, agenda: [], hoy: '' };
+  var CACHE = {};          // fecha -> eventos de Google Calendar de ese día
   var TAB = 'pago_por_validar';
+  var SEMANA = '';         // lunes de la semana visible en Agenda
+  var PX_HORA = 44, H0 = 8, H1 = 19;
+  var DIAS_CERRADOS = [0, 1];
   var TABS = [
+    ['agenda', 'Agenda'],
     ['pago_por_validar', 'Pagos por validar'],
     ['por_agendar', 'Por agendar'],
     ['cita_confirmada', 'Citas confirmadas'],
     ['historial', 'Rechazadas / historial']
   ];
 
+  // ---------------------------------------------------------------- utilidades
   function colones(n){ return '₡' + String(Math.round(Number(n)||0)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
-  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
-  function fechaLarga(iso){
-    if(!iso) return '—';
-    var d = new Date(iso + 'T12:00:00');
-    return d.toLocaleDateString('es-CR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function fechaD(iso){ return new Date(iso + 'T12:00:00'); }
+  function isoDe(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+  function sumaDias(iso, n){ var d = fechaD(iso); d.setDate(d.getDate() + n); return isoDe(d); }
+  function lunesDe(iso){ var d = fechaD(iso), w = (d.getDay() + 6) % 7; return sumaDias(iso, -w); }
+  function fechaLarga(iso){ return iso ? fechaD(iso).toLocaleDateString('es-CR', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : '—'; }
+  function fechaCorta(iso){ return fechaD(iso).toLocaleDateString('es-CR', { weekday:'short', day:'numeric', month:'short' }); }
+  function horas(hhmm){ var p = String(hhmm).split(':'); return Number(p[0]) + Number(p[1]||0)/60; }
+  function h12(hhmm){ var p = String(hhmm).split(':'), h = Number(p[0]); return ((h+11)%12+1) + ':' + (p[1]||'00') + (h<12?' am':' pm'); }
+  function sumarHoras(hhmm, hs){
+    var t = Math.min(horas(hhmm)*60 + Math.round(hs*60), 23*60+45);
+    return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0');
   }
   function aviso(t){ var a=document.getElementById('aviso'); a.textContent=t; a.style.display='block'; setTimeout(function(){a.style.display='none';},3500); }
 
+  // ---------------------------------------------------------------- datos
+  function guardarAgenda(desde, hasta, eventos){
+    for (var f = desde; f <= hasta; f = sumaDias(f, 1)) CACHE[f] = [];
+    eventos.forEach(function(e){ (CACHE[e.fecha] = CACHE[e.fecha] || []).push(e); });
+  }
+  function recibir(d){
+    DATOS = d;
+    CACHE = {};
+    guardarAgenda(d.agendaDesde, d.agendaHasta, d.agenda || []);
+    if (!SEMANA) SEMANA = lunesDe(d.hoy);
+    pintar();
+  }
+  /** Asegura que tengamos los eventos de [desde, hasta]; si falta algo lo pide al servidor. */
+  function asegurarAgenda(desde, hasta, listo){
+    for (var f = desde; f <= hasta; f = sumaDias(f, 1)) {
+      if (!CACHE[f]) {
+        google.script.run.withSuccessHandler(function(evs){ guardarAgenda(desde, hasta, evs); listo(); })
+          .withFailureHandler(function(e){ aviso('Error al leer el calendario: ' + e.message); }).agenda(desde, hasta);
+        return false;
+      }
+    }
+    return true;
+  }
+  function reservaPorId(id){ return DATOS.reservas.filter(function(r){ return r.id === id; })[0]; }
+  function sinHora(fecha){
+    return DATOS.reservas.filter(function(r){
+      return (r.estado === 'pago_por_validar' || r.estado === 'pago_aprobado') && r.fecha_solicitada === fecha;
+    });
+  }
+
+  // ---------------------------------------------------------------- pestañas
   function enTab(r, tab){
-    if (tab === 'por_agendar') return r.estado === 'pago_aprobado' || r.estado === 'dia_saturado';
+    if (tab === 'por_agendar') return r.estado === 'pago_aprobado' || r.estado === 'dia_saturado' || r.estado === 'cita_agendada';
     if (tab === 'historial') return r.estado === 'pago_rechazado' || r.estado === 'cancelada';
     return r.estado === tab;
   }
-
   function pintarTabs(){
     document.getElementById('tabs').innerHTML = TABS.map(function(t){
-      var n = DATOS.reservas.filter(function(r){ return enTab(r, t[0]); }).length;
-      return '<button class="tab' + (TAB===t[0]?' activa':'') + '" onclick="TAB=\'' + t[0] + '\';pintar()">' + t[1] + '<span>' + n + '</span></button>';
+      var n = t[0] === 'agenda' ? '' : '<span>' + DATOS.reservas.filter(function(r){ return enTab(r, t[0]); }).length + '</span>';
+      return '<button class="tab' + (TAB===t[0]?' activa':'') + '" onclick="irTab(\'' + t[0] + '\')">' + t[1] + n + '</button>';
     }).join('');
   }
-
-  function textoCarga(fecha){
-    var c = DATOS.carga[fecha];
-    if (!c) return '<div class="carga">Ese día aún no tiene otras reservas.</div>';
-    var lleno = c.manana >= DATOS.cupo && c.tarde >= DATOS.cupo;
-    return '<div class="carga' + (lleno?' llena':'') + '">Ocupación de ese día: mañana ' + c.manana.toFixed(1) + '/' + DATOS.cupo +
-      ' · tarde ' + c.tarde.toFixed(1) + '/' + DATOS.cupo + ' (' + c.citas + ' reservas activas). Tú decides si agendar igual.</div>';
+  function irTab(t){ TAB = t; pintar(); }
+  function pintar(){
+    pintarTabs();
+    if (TAB === 'agenda') return pintarAgenda();
+    var lista = DATOS.reservas.filter(function(r){ return enTab(r, TAB); });
+    if (TAB === 'cita_confirmada') lista.sort(function(a,b){ return (a.fecha_cita + a.hora_inicio).localeCompare(b.fecha_cita + b.hora_inicio); });
+    document.getElementById('lista').innerHTML = lista.length ? lista.map(tarjeta).join('') : '<p class="vacio">No hay reservas en esta sección.</p>';
+    lista.forEach(function(r){ if (document.getElementById('pv-' + r.id)) pintarPrevia(r.id); });
+  }
+  function irAReserva(id){
+    var r = reservaPorId(id); if (!r) return;
+    TAB = TABS.map(function(t){ return t[0]; }).filter(function(t){ return t !== 'agenda' && enTab(r, t); })[0] || 'historial';
+    pintar();
+    var c = document.getElementById('c-' + id);
+    if (c) { c.classList.add('resaltada'); c.scrollIntoView({ behavior:'smooth', block:'start' }); }
   }
 
+  // ---------------------------------------------------------------- columna de un día (agenda y vista previa)
+  function claseEvento(e){ return e.estado === 'cita_confirmada' ? 'ok' : (e.estado === 'cita_agendada' ? 'pend' : 'ext'); }
+
+  /** Reparte los eventos que se cruzan en carriles lado a lado. */
+  function carriles(evs){
+    evs = evs.slice().sort(function(a,b){ return horas(a.ini) - horas(b.ini) || horas(b.fin) - horas(a.fin); });
+    var grupo = [], finGrupo = -1, fines = [];
+    function cerrar(){ grupo.forEach(function(e){ e._n = fines.length; }); grupo = []; fines = []; }
+    evs.forEach(function(e){
+      var a = horas(e.ini), b = Math.max(horas(e.fin), a + .25);
+      if (a >= finGrupo) cerrar();
+      var l = 0; while (l < fines.length && fines[l] > a) l++;
+      fines[l] = b; e._l = l; grupo.push(e); finGrupo = Math.max(finGrupo, b);
+    });
+    cerrar();
+    return evs;
+  }
+
+  function columna(fecha, evs, propuesta){
+    var todos = evs.filter(function(e){ return !e.todoElDia; }).map(function(e){ return Object.assign({}, e); });
+    if (propuesta) todos.push({ ini: propuesta.ini, fin: propuesta.fin, prop: true, titulo: 'Esta cita' });
+    carriles(todos);
+    var cerrado = DIAS_CERRADOS.indexOf(fechaD(fecha).getDay()) >= 0;
+    var h = '<div class="col' + (cerrado ? ' cerrado' : '') + '" style="--hora:' + PX_HORA + 'px;height:' + ((H1-H0)*PX_HORA) + 'px">';
+    todos.forEach(function(e){
+      var a = Math.max(horas(e.ini), H0), b = Math.min(Math.max(horas(e.fin), horas(e.ini) + .25), H1);
+      var top = (a - H0) * PX_HORA, alto = Math.max((b - a) * PX_HORA - 2, 16);
+      var ancho = 100 / e._n, izq = ancho * e._l;
+      var texto = e.prop ? 'Esta cita' : (e.nombre ? esc(e.servicio) + ' · ' + esc(e.nombre) : esc(e.titulo));
+      var tip = h12(e.ini) + '–' + h12(e.fin) + ' · ' + (e.prop ? 'Esta cita (propuesta)' : (e.nombre ? e.servicio + ' · ' + e.nombre : e.titulo)) +
+        (e.estado === 'cita_agendada' ? ' · falta confirmar a la clienta' : '');
+      h += '<div class="ev ' + (e.prop ? 'prop' : claseEvento(e)) + '" title="' + esc(tip) + '"' +
+        (e.reserva ? ' onclick="irAReserva(\'' + e.reserva + '\')"' : '') +
+        ' style="top:' + top + 'px;height:' + alto + 'px;left:calc(' + izq + '% + 2px);width:calc(' + ancho + '% - 4px)">' +
+        '<b>' + h12(e.ini) + '–' + h12(e.fin) + '</b>' + texto + '</div>';
+    });
+    return h + '</div>';
+  }
+  function gutter(){
+    var h = '<div class="gutter" style="height:' + ((H1-H0)*PX_HORA) + 'px">';
+    for (var i = H0 + 1; i < H1; i++) h += '<span style="top:' + ((i-H0)*PX_HORA) + 'px">' + h12(i + ':00').replace(':00','') + '</span>';
+    return h + '</div>';
+  }
+  function ajustarHoras(evs){
+    H0 = 8; H1 = 19;
+    evs.forEach(function(e){ if (e.todoElDia) return; H0 = Math.min(H0, Math.floor(horas(e.ini))); H1 = Math.max(H1, Math.ceil(horas(e.fin))); });
+  }
+
+  // ---------------------------------------------------------------- pestaña Agenda
+  function pintarAgenda(){
+    var desde = SEMANA, hasta = sumaDias(SEMANA, 6);
+    var cont = document.getElementById('lista');
+    if (!asegurarAgenda(desde, hasta, pintarAgenda)) { cont.innerHTML = '<p class="vacio">Leyendo el calendario…</p>'; return; }
+    var dias = [];
+    for (var i = 0; i < 7; i++) {
+      var f = sumaDias(desde, i);
+      var cerrado = DIAS_CERRADOS.indexOf(fechaD(f).getDay()) >= 0;
+      if (!cerrado || (CACHE[f] || []).length) dias.push(f);
+    }
+    var todos = [];
+    dias.forEach(function(f){ todos = todos.concat(CACHE[f] || []); });
+    ajustarHoras(todos);
+
+    var cols = '52px repeat(' + dias.length + ', minmax(120px, 1fr))';
+    var h = '<div class="agenda-top"><h2>' + fechaCorta(desde) + ' – ' + fechaCorta(hasta) + '</h2><div class="acciones">' +
+      '<button class="btn sec" onclick="moverSemana(-7)">‹ Anterior</button>' +
+      '<button class="btn sec" onclick="SEMANA=lunesDe(DATOS.hoy);pintarAgenda()">Hoy</button>' +
+      '<button class="btn sec" onclick="moverSemana(7)">Siguiente ›</button></div></div>' +
+      '<div class="leyenda"><span><i style="background:#e3efe0;border-left:3px solid var(--ok)"></i>Confirmada</span>' +
+      '<span><i style="background:#f5ecd6;border-left:3px solid var(--warn)"></i>En calendario, falta confirmar</span>' +
+      '<span><i style="background:#ecebe8;border-left:3px solid var(--muted)"></i>Otro evento de Google Calendar</span>' +
+      '<span>Se actualiza sola cada minuto · clic en una cita para abrirla</span></div>' +
+      '<div class="semana-scroll"><div class="semana" style="grid-template-columns:' + cols + '">';
+
+    h += '<div class="dia-cab" style="border-left:0"></div>';
+    dias.forEach(function(f){
+      var c = DATOS.carga[f], evs = (CACHE[f] || []).filter(function(e){ return !e.todoElDia; });
+      var lleno = c && c.manana >= DATOS.cupo && c.tarde >= DATOS.cupo;
+      h += '<div class="dia-cab' + (f === DATOS.hoy ? ' hoy' : '') + '"><b>' + fechaCorta(f) + '</b>' +
+        '<small>' + evs.length + ' en calendario</small>' +
+        (c ? '<small class="' + (lleno ? 'llena' : '') + '">Cupo M ' + c.manana.toFixed(1) + '/' + DATOS.cupo + ' · T ' + c.tarde.toFixed(1) + '/' + DATOS.cupo + '</small>' : '') + '</div>';
+    });
+    h += '<div class="extras" style="border-left:0"></div>';
+    dias.forEach(function(f){
+      h += '<div class="extras">' +
+        (CACHE[f] || []).filter(function(e){ return e.todoElDia; }).map(function(e){ return '<div title="Todo el día">' + esc(e.titulo) + '</div>'; }).join('') +
+        sinHora(f).map(function(r){
+          return '<div onclick="irAReserva(\'' + r.id + '\')" title="Solicitada, todavía sin hora">Sin hora · ' + esc(r.nombre) + ' · ' + esc(r.franja) +
+            (r.estado === 'pago_por_validar' ? ' (pago por validar)' : '') + '</div>';
+        }).join('') + '</div>';
+    });
+    h += gutter();
+    dias.forEach(function(f){ h += columna(f, CACHE[f] || []); });
+    cont.innerHTML = h + '</div></div>';
+  }
+  function moverSemana(n){ SEMANA = sumaDias(SEMANA, n); pintarAgenda(); }
+
+  // ---------------------------------------------------------------- tarjetas
+  function textoCarga(fecha){
+    var c = DATOS.carga[fecha];
+    if (!c) return '<div class="carga">Cupo en línea de ese día: libre.</div>';
+    var lleno = c.manana >= DATOS.cupo && c.tarde >= DATOS.cupo;
+    return '<div class="carga' + (lleno?' llena':'') + '">Cupo en línea de ese día: mañana ' + c.manana.toFixed(1) + '/' + DATOS.cupo +
+      ' · tarde ' + c.tarde.toFixed(1) + '/' + DATOS.cupo + ' (' + c.citas + ' reservas). Tú decides si agendar igual.</div>';
+  }
   function chipEstado(e){
-    var m = { pago_por_validar:['Pago por validar','warn'], pago_aprobado:['Pago aprobado','ok'], dia_saturado:['Día saturado · contactar','warn'],
-              cita_confirmada:['Cita confirmada','ok'], pago_rechazado:['Pago rechazado','bad'], cancelada:['Cancelada','bad'] }[e] || [e,''];
+    var m = { pago_por_validar:['Pago por validar','warn'], pago_aprobado:['Pago aprobado · por agendar','ok'], dia_saturado:['Día saturado · contactar','warn'],
+              cita_agendada:['En calendario · falta confirmar','warn'], cita_confirmada:['Cita confirmada','ok'],
+              pago_rechazado:['Pago rechazado','bad'], cancelada:['Cancelada','bad'] }[e] || [e,''];
     return '<span class="chip ' + m[1] + '">' + m[0] + '</span>';
   }
 
+  function formAgendar(r, visible){
+    var fecha = r.fecha_cita || r.fecha_solicitada;
+    var ini = r.hora_inicio || (r.franja === 'Tarde' ? '13:00' : '09:00');
+    var fin = r.hora_fin || sumarHoras(ini, Number(r.dur_max_h) || 2);
+    var titulo = r.estado === 'cita_confirmada' ? 'Mover la cita' : (r.estado === 'cita_agendada' ? 'Cambiar fecha u hora' : 'Paso 1 · Elegir fecha y hora');
+    return '<div class="paso' + (visible ? '' : ' oculto') + '" id="f-' + r.id + '"><h4>' + titulo + '</h4><div class="agendar"><div>' +
+      '<div class="campos">' +
+        '<div><label>Fecha</label><input type="date" id="fe-' + r.id + '" value="' + fecha + '" oninput="pintarPrevia(\'' + r.id + '\')"></div>' +
+        '<div><label>Inicio</label><input type="time" id="hi-' + r.id + '" value="' + ini + '" step="900" oninput="pintarPrevia(\'' + r.id + '\')"></div>' +
+        '<div><label>Fin</label><input type="time" id="hf-' + r.id + '" value="' + fin + '" step="900" oninput="pintarPrevia(\'' + r.id + '\')"></div>' +
+      '</div><div id="cg-' + r.id + '">' + textoCarga(fecha) + '</div>' +
+      '<div class="acciones"><button class="btn" onclick="agendar(this,\'' + r.id + '\')">Poner en Google Calendar</button></div>' +
+      '<p class="nota">Todavía no se le avisa a la clienta: primero revisa cómo queda el día' +
+        (r.estado === 'cita_confirmada' ? '. Después de moverla tendrás que confirmarla de nuevo para enviarle la nueva hora.' : '.') + '</p>' +
+      '</div><div id="pv-' + r.id + '"></div></div></div>';
+  }
+
   function tarjeta(r){
-    var fechaBase = r.fecha_cita || r.fecha_solicitada;
     var h = '<div class="card" id="c-' + r.id + '">' +
       '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><h3>' + esc(r.nombre) + '</h3>' + chipEstado(r.estado) + '</div>' +
       '<p class="meta">' + esc(r.servicio) + ' · ' + esc(r.categoria) + ' · largo ' + esc(r.largo) + ' · reserva ' + esc(r.id) + '</p>' +
       '<div class="grid">' +
         '<div><span>Fecha solicitada</span>' + fechaLarga(r.fecha_solicitada) + ' · ' + esc(r.franja) + '</div>' +
-        (r.estado==='cita_confirmada' ? '<div><span>Cita agendada</span>' + fechaLarga(r.fecha_cita) + ' · ' + esc(r.hora_inicio) + '–' + esc(r.hora_fin) + '</div>' : '') +
+        ((r.estado==='cita_confirmada' || r.estado==='cita_agendada') ? '<div><span>En calendario</span>' + fechaLarga(r.fecha_cita) + ' · ' + h12(r.hora_inicio) + '–' + h12(r.hora_fin) + '</div>' : '') +
         '<div><span>Depósito</span>' + (Number(r.deposito)>0 ? colones(r.deposito) : 'No requiere') + '</div>' +
         '<div><span>Descripción esperada SINPE</span>' + esc(r.descripcion_sinpe || '—') + '</div>' +
         '<div><span>Celular</span><a class="link" href="https://wa.me/' + String(r.celular).replace(/\D/g,'') + '" target="_blank">' + esc(r.celular) + '</a></div>' +
@@ -119,83 +328,82 @@
         (r.motivo ? '<div><span>Motivo / nota</span>' + esc(r.motivo) + '</div>' : '') +
       '</div>';
 
-    if (r.comprobante_url) h += '<p style="margin-bottom:12px"><a class="link" href="' + r.comprobante_url + '" target="_blank">Ver comprobante →</a></p>';
+    if (r.comprobante_url) h += '<p style="margin-bottom:12px"><a class="link" href="' + esc(r.comprobante_url) + '" target="_blank">Ver comprobante →</a></p>';
 
     if (r.estado === 'pago_por_validar') {
       h += '<div class="acciones">' +
-        '<button class="btn" onclick="accion(this,\'aprobarPago\',\'' + r.id + '\')">Aprobar pago</button>' +
+        '<button class="btn" onclick="accion(this,\'aprobarPago\',\'' + r.id + '\',\'Pago aprobado. Se envió el correo a la clienta.\')">Aprobar pago</button>' +
         '<button class="btn bad" onclick="rechazar(this,\'' + r.id + '\')">Rechazar pago</button></div>';
     }
-    if (r.estado === 'pago_aprobado' || r.estado === 'dia_saturado' || r.estado === 'cita_confirmada') {
-      var ini = r.hora_inicio || (r.franja === 'Tarde' ? '13:00' : '09:00');
-      var dur = Number(r.dur_max_h) || 2;
-      var fin = r.hora_fin || sumarHoras(ini, dur);
-      h += '<div class="acciones">' +
-        '<button class="btn" onclick="abrir(\'' + r.id + '\')">' + (r.estado==='cita_confirmada' ? 'Cambiar fecha u hora' : 'Confirmar cita') + '</button>' +
-        (r.estado === 'pago_aprobado' ? '<button class="btn sec" onclick="saturado(this,\'' + r.id + '\')">Día saturado</button>' : '') +
-        '</div>' +
-        '<div class="confirmar" id="f-' + r.id + '">' +
-          textoCarga(fechaBase) +
-          '<div class="campos">' +
-            '<div><label>Fecha</label><input type="date" id="fe-' + r.id + '" value="' + fechaBase + '" onchange="refrescarCarga(\'' + r.id + '\')"></div>' +
-            '<div><label>Inicio</label><input type="time" id="hi-' + r.id + '" value="' + ini + '" step="900"></div>' +
-            '<div><label>Fin</label><input type="time" id="hf-' + r.id + '" value="' + fin + '" step="900"></div>' +
-            '<button class="btn" onclick="confirmar(this,\'' + r.id + '\')">Agendar en Google Calendar</button>' +
-          '</div><div id="cg-' + r.id + '"></div>' +
-        '</div>';
+    if (r.estado === 'pago_aprobado' || r.estado === 'dia_saturado') {
+      h += formAgendar(r, true);
+      if (r.estado === 'pago_aprobado') h += '<div class="acciones" style="margin-top:10px"><button class="btn sec" onclick="saturado(this,\'' + r.id + '\')">Día saturado · coordinar otra fecha</button></div>';
+    }
+    if (r.estado === 'cita_agendada') {
+      h += '<div class="paso"><h4>Paso 2 · Confirmar a la clienta</h4>' +
+        '<div class="en-cal">Ya está en Google Calendar el <b>' + fechaLarga(r.fecha_cita) + '</b>, de ' + h12(r.hora_inicio) + ' a ' + h12(r.hora_fin) +
+        '. Si el día se ve bien, confírmala y le llega el correo con la hora.</div>' +
+        '<div class="acciones">' +
+          '<button class="btn ok" onclick="accion(this,\'confirmarCita\',\'' + r.id + '\',\'Cita confirmada. Se envió el correo a la clienta.\')">Confirmar cita y enviar correo</button>' +
+          '<button class="btn sec" onclick="abrir(\'' + r.id + '\')">Cambiar fecha u hora</button>' +
+          '<button class="btn sec" onclick="saturado(this,\'' + r.id + '\')">Día saturado · coordinar otra fecha</button>' +
+        '</div></div>' + formAgendar(r, false);
+    }
+    if (r.estado === 'cita_confirmada') {
+      h += '<div class="acciones"><button class="btn sec" onclick="abrir(\'' + r.id + '\')">Mover la cita</button></div>' + formAgendar(r, false);
     }
     if (r.historial) h += '<div class="historial">' + esc(r.historial) + '</div>';
     return h + '</div>';
   }
 
-  function sumarHoras(hhmm, horas){
-    var p = hhmm.split(':'), t = Number(p[0]) * 60 + Number(p[1]) + Math.round(horas * 60);
-    t = Math.min(t, 23 * 60 + 45);
-    return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0');
+  function abrir(id){ document.getElementById('f-' + id).classList.toggle('oculto'); pintarPrevia(id); }
+
+  /** Vista previa del día elegido con la cita propuesta encima de lo que ya hay en Calendar. */
+  function pintarPrevia(id){
+    var caja = document.getElementById('pv-' + id); if (!caja) return;
+    var f = document.getElementById('fe-' + id).value, hi = document.getElementById('hi-' + id).value, hf = document.getElementById('hf-' + id).value;
+    document.getElementById('cg-' + id).innerHTML = f ? textoCarga(f) : '';
+    if (!f) { caja.innerHTML = ''; return; }
+    if (!asegurarAgenda(f, f, function(){ pintarPrevia(id); })) { caja.innerHTML = '<p class="nota">Leyendo el calendario…</p>'; return; }
+    var evs = (CACHE[f] || []).filter(function(e){ return e.reserva !== id; });
+    var prop = hi && hf && horas(hf) > horas(hi) ? { ini: hi, fin: hf } : null;
+    ajustarHoras(evs.concat(prop ? [prop] : []));
+    var cerrado = DIAS_CERRADOS.indexOf(fechaD(f).getDay()) >= 0;
+    caja.innerHTML = '<div class="previa"><div class="titulo">' + fechaCorta(f) + ' · ' + evs.filter(function(e){ return !e.todoElDia; }).length +
+      ' en calendario' + (cerrado ? ' · día cerrado' : '') + '</div>' + gutter() + columna(f, evs, prop) + '</div>';
   }
 
-  function pintar(){
-    pintarTabs();
-    var lista = DATOS.reservas.filter(function(r){ return enTab(r, TAB); });
-    if (TAB === 'cita_confirmada') lista.sort(function(a,b){ return (a.fecha_cita + a.hora_inicio).localeCompare(b.fecha_cita + b.hora_inicio); });
-    document.getElementById('lista').innerHTML = lista.length ? lista.map(tarjeta).join('') : '<p class="vacio">No hay reservas en esta sección.</p>';
-  }
-
-  function abrir(id){ document.getElementById('f-' + id).classList.toggle('abierto'); }
-  function refrescarCarga(id){
-    var f = document.getElementById('fe-' + id).value;
-    var box = document.getElementById('f-' + id).querySelector('.carga');
-    var tmp = document.createElement('div'); tmp.innerHTML = textoCarga(f);
-    box.replaceWith(tmp.firstChild);
-  }
-
+  // ---------------------------------------------------------------- acciones
   function ejecutar(btn, fn, args, ok){
     btn.disabled = true;
-    var runner = google.script.run.withSuccessHandler(function(d){ DATOS = d; pintar(); aviso(ok); })
+    var runner = google.script.run.withSuccessHandler(function(d){ recibir(d); aviso(ok); })
       .withFailureHandler(function(e){ btn.disabled = false; aviso('Error: ' + e.message); });
     runner[fn].apply(runner, args);
   }
-  function accion(btn, fn, id){ ejecutar(btn, fn, [id], 'Listo. Se envió el correo a la clienta.'); }
+  function accion(btn, fn, id, ok){ ejecutar(btn, fn, [id], ok); }
   function rechazar(btn, id){
     var motivo = prompt('Motivo del rechazo (se le envía a la clienta):', 'El monto o la descripción del SINPE no coinciden con la reserva.');
     if (motivo === null) return;
     ejecutar(btn, 'rechazarPago', [id, motivo], 'Pago rechazado. Se liberó el espacio y se avisó a la clienta.');
   }
   function saturado(btn, id){
-    if (!confirm('¿Marcar como día saturado? Se le enviará el correo para coordinar otra fecha.')) return;
+    if (!confirm('¿Marcar como día saturado? Se quita del calendario (si estaba) y se le envía el correo para coordinar otra fecha por WhatsApp.')) return;
     ejecutar(btn, 'marcarDiaSaturado', [id, ''], 'Correo de día saturado enviado.');
   }
-  function confirmar(btn, id){
+  function agendar(btn, id){
     var f = document.getElementById('fe-' + id).value, hi = document.getElementById('hi-' + id).value, hf = document.getElementById('hf-' + id).value;
     if (!f || !hi || !hf) return aviso('Completa fecha, inicio y fin.');
-    ejecutar(btn, 'confirmarCita', [id, f, hi, hf], 'Cita agendada en Google Calendar y correo enviado.');
+    if (horas(hf) <= horas(hi)) return aviso('La hora de fin debe ser posterior a la de inicio.');
+    ejecutar(btn, 'agendarCita', [id, f, hi, hf], 'Puesta en Google Calendar. Revisa el día y confírmala.');
   }
 
   function cargar(){
-    google.script.run.withSuccessHandler(function(d){ DATOS = d; pintar(); })
+    google.script.run.withSuccessHandler(recibir)
       .withFailureHandler(function(e){ document.getElementById('lista').innerHTML = '<p class="vacio">' + esc(e.message) + '</p>'; })
       .panelDatos();
   }
+  // La agenda se refresca sola cada minuto (solo en esa pestaña, para no borrar formularios a medio llenar).
+  setInterval(function(){ if (TAB === 'agenda' && !document.hidden) cargar(); }, 60000);
   cargar();
 </script>
 </body>
