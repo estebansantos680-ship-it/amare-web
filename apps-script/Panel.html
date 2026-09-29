@@ -63,7 +63,10 @@
   .agenda-top .btn{ padding:9px 12px; }
   .leyenda{ display:flex; gap:12px; flex-wrap:wrap; font-size:11px; color:var(--muted); margin-bottom:10px; }
   .leyenda i{ display:inline-block; width:10px; height:10px; margin-right:5px; vertical-align:-1px; }
+  main.ancho{ max-width:1700px; }
+  .semana-scroll{ width:100%; }
   .semana{ display:grid; background:#fff; border:1px solid var(--line); width:100%; }
+  .dia-cab.cerrado{ background:#f4f2ee; color:var(--muted); }
   .dia-cab{ padding:6px; border-left:1px solid var(--line); border-bottom:1px solid var(--line); font-size:12px; min-width:0; position:sticky; top:var(--cab, 62px); background:#fff; z-index:2; }
   .dia-cab b{ display:block; text-transform:capitalize; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .dia-cab.hoy{ background:var(--sand); }
@@ -86,7 +89,10 @@
   .previa .titulo{ grid-column:1 / 3; font-size:11px; font-weight:600; padding:6px 8px; border-bottom:1px solid var(--line); text-transform:capitalize; }
   @media (max-width:640px){
     .agenda-top h2{ font-size:18px; }
-    .semana{ margin:0 -12px; width:calc(100% + 24px); border-left:0; border-right:0; }
+    /* En el celular la semana completa se desliza de lado a lado (7 días no caben legibles en 375 px). */
+    .semana-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; margin:0 -12px; width:calc(100% + 24px); }
+    .semana{ min-width:520px; border-left:0; border-right:0; }
+    .dia-cab{ position:static; }
     .dia-cab{ padding:4px 3px; font-size:11px; }
     .dia-cab b{ font-size:11px; }
     .ev{ padding:2px 3px; font-size:9px; border-left-width:2px; }
@@ -246,6 +252,7 @@
   function irTab(t){ TAB = t; pintar(); window.scrollTo(0, 0); }
   function pintar(){
     calcularCarga();
+    document.querySelector('main').classList.toggle('ancho', TAB === 'agenda');
     pintarTabs();
     if (TAB === 'agenda') return pintarAgenda();
     var lista = DATOS.reservas.filter(function(r){ return enTab(r, TAB); });
@@ -317,11 +324,7 @@
     if (!asegurarAgenda(desde, hasta, pintarAgenda)) { cont.innerHTML = '<p class="vacio">Leyendo el calendario…</p>'; return; }
     VISTA = [];
     var dias = [];
-    for (var i = 0; i < 7; i++) {
-      var f = sumaDias(desde, i);
-      var cerrado = DIAS_CERRADOS.indexOf(fechaD(f).getDay()) >= 0;
-      if (!cerrado || (CACHE[f] || []).length) dias.push(f);
-    }
+    for (var i = 0; i < 7; i++) dias.push(sumaDias(desde, i)); // semana completa, lunes a domingo
     var todos = [];
     dias.forEach(function(f){ todos = todos.concat(CACHE[f] || []); });
     ajustarHoras(todos);
@@ -333,13 +336,14 @@
       '<div class="leyenda"><span><i style="background:#e3efe0;border-left:3px solid var(--ok)"></i>Confirmada</span>' +
       '<span><i style="background:#f5ecd6;border-left:3px solid var(--warn)"></i>Falta confirmar</span>' +
       '<span><i style="background:#ecebe8;border-left:3px solid var(--muted)"></i>Otro evento</span></div>' +
-      '<div class="semana" style="grid-template-columns:34px repeat(' + dias.length + ', minmax(0, 1fr))">';
+      '<div class="semana-scroll"><div class="semana" style="grid-template-columns:34px repeat(' + dias.length + ', minmax(0, 1fr))">';
 
     h += '<div class="dia-cab" style="border-left:0"></div>';
     dias.forEach(function(f){
       var c = CARGA[f];
       var lleno = c && c.manana >= DATOS.cupo && c.tarde >= DATOS.cupo;
-      h += '<div class="dia-cab' + (f === DATOS.hoy ? ' hoy' : '') + '"><b><span class="largo">' + fechaCorta(f) + '</span><span class="corto">' + diaCorto(f) + '</span></b>' +
+      var cerr = DIAS_CERRADOS.indexOf(fechaD(f).getDay()) >= 0;
+      h += '<div class="dia-cab' + (f === DATOS.hoy ? ' hoy' : (cerr ? ' cerrado' : '')) + '"><b><span class="largo">' + fechaCorta(f) + '</span><span class="corto">' + diaCorto(f) + '</span></b>' +
         (c ? '<small class="' + (lleno ? 'llena' : '') + '"><span class="largo">Cupo M ' + c.manana.toFixed(1) + '/' + DATOS.cupo + ' · T ' + c.tarde.toFixed(1) + '/' + DATOS.cupo + '</span>' +
              '<span class="corto">M' + (+c.manana.toFixed(1)) + ' T' + (+c.tarde.toFixed(1)) + '</span></small>' : '<small>Libre</small>') + '</div>';
     });
@@ -353,7 +357,7 @@
     });
     h += gutter();
     dias.forEach(function(f){ h += columna(f, CACHE[f] || []); });
-    cont.innerHTML = h + '</div><p class="nota">Se actualiza sola cada minuto. Toca una cita para ver el detalle.</p>';
+    cont.innerHTML = h + '</div></div><p class="nota">Se actualiza sola cada minuto. Toca una cita para ver el detalle. Domingo y lunes en gris: cerrado para reservas en línea.</p>';
   }
   function moverSemana(n){ SEMANA = sumaDias(SEMANA, n); pintarAgenda(); }
 
