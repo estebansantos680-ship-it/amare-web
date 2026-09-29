@@ -131,31 +131,35 @@ function doPost(e) {
     var r = validarReserva_(datos.reserva || {});
     if (r.error) return json_({ ok: false, error: r.error });
 
-    // Evitar sobreventa en el último segundo: la franja podría haberse llenado.
-    var bloqueos = calcularBloqueos_();
-    var b = bloqueos[r.fecha_solicitada];
-    var franjaKey = r.franja === 'Tarde' ? 'tarde' : 'manana';
-    if (b && (b[franjaKey] || (r.dur_max_h > CONFIG.HORAS_SERVICIO_LARGO && (b.manana || b.tarde)))) {
-      return json_({ ok: false, error: 'franja_llena' });
+    r.estado = ESTADOS.PAGO_POR_VALIDAR;
+    var archivo = null;
+    if (datos.comprobante && datos.comprobante.base64) {
+      // Fuera del candado: subir a Drive es lo más lento y no debe hacer esperar a otras reservas.
+      archivo = guardarComprobante_(r, datos.comprobante);
+      r.comprobante_url = archivo.getUrl();
+      r.comprobante_id = archivo.getId();
+    } else if (Number(r.deposito) > 0) {
+      return json_({ ok: false, error: 'falta_comprobante' });
+    } else {
+      r.estado = ESTADOS.PAGO_APROBADO; // sin depósito: pasa directo a agendar
     }
 
+    // Revisar cupo y guardar dentro del candado: si llegan varias a la vez, se atienden una por una
+    // y nunca se vende dos veces el último espacio.
     var lock = LockService.getScriptLock();
-    lock.waitLock(20000);
+    lock.waitLock(30000);
     try {
+      var b = calcularBloqueos_()[r.fecha_solicitada];
+      var franjaKey = r.franja === 'Tarde' ? 'tarde' : 'manana';
+      if (b && (b[franjaKey] || (r.dur_max_h > CONFIG.HORAS_SERVICIO_LARGO && (b.manana || b.tarde)))) {
+        if (archivo) archivo.setTrashed(true);
+        return json_({ ok: false, error: 'franja_llena' });
+      }
       r.id = 'AM-' + Utilities.formatDate(new Date(), CONFIG.ZONA, 'yyMMdd-HHmmss') + '-' + Math.floor(Math.random() * 900 + 100);
       r.creado = new Date();
-      r.estado = ESTADOS.PAGO_POR_VALIDAR;
-      if (datos.comprobante && datos.comprobante.base64) {
-        var archivo = guardarComprobante_(r, datos.comprobante);
-        r.comprobante_url = archivo.getUrl();
-        r.comprobante_id = archivo.getId();
-      } else if (Number(r.deposito) > 0) {
-        return json_({ ok: false, error: 'falta_comprobante' });
-      } else {
-        r.estado = ESTADOS.PAGO_APROBADO; // sin depósito: pasa directo a agendar
-      }
       r.historial = fechaTexto_(new Date()) + ' · reserva recibida desde la web';
       guardarFila_(r);
+      SpreadsheetApp.flush();
     } finally {
       lock.releaseLock();
     }
@@ -496,21 +500,34 @@ function parametrosCorreo_(r) {
   return p;
 }
 
+/** Diagnóstico: ejecutar desde el editor. Envía el correo "solicitud" de la última reserva a facturas@ y registra la respuesta de EmailJS. */
+function probarCorreo() {
+  exigirAdmin_();
+  var r = leerReservas_().pop();
+  r.correo = CONFIG.ADMIN_EMAIL;
+  Logger.log('Resultado: ' + enviarCorreo_('solicitud', r, { nota_pago: 'Prueba de diagnóstico.' }));
+}
+
 function enviarCorreo_(clave, r, extra) {
   var template = PropertiesService.getScriptProperties().getProperty('TEMPLATE_' + clave) || CONFIG.EMAILJS.templates[clave];
   if (!template) { console.warn('Template sin configurar: ' + clave); return false; }
   var params = parametrosCorreo_(r);
   Object.keys(extra || {}).forEach(function (k) { params[k] = extra[k]; });
+  var cuerpo = {
+    service_id: CONFIG.EMAILJS.serviceId,
+    template_id: template,
+    user_id: CONFIG.EMAILJS.publicKey,
+    template_params: params
+  };
+  // Con "strict mode" activo en EmailJS (Account → Security) hace falta la Private Key.
+  // Se guarda en Propiedades del script como EMAILJS_PRIVATE_KEY (nunca en el código).
+  var privada = PropertiesService.getScriptProperties().getProperty('EMAILJS_PRIVATE_KEY');
+  if (privada) cuerpo.accessToken = privada;
   var resp = UrlFetchApp.fetch('https://api.emailjs.com/api/v1.0/email/send', {
     method: 'post',
     contentType: 'application/json',
     muteHttpExceptions: true,
-    payload: JSON.stringify({
-      service_id: CONFIG.EMAILJS.serviceId,
-      template_id: template,
-      user_id: CONFIG.EMAILJS.publicKey,
-      template_params: params
-    })
+    payload: JSON.stringify(cuerpo)
   });
   if (resp.getResponseCode() !== 200) {
     console.error('EmailJS ' + clave + ': ' + resp.getResponseCode() + ' ' + resp.getContentText());
