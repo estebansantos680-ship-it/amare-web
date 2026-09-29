@@ -44,6 +44,10 @@
   .aviso{ position:fixed; left:50%; bottom:16px; transform:translateX(-50%); width:max-content; max-width:calc(100% - 24px); background:var(--black); color:var(--cream); padding:12px 16px; font-size:13px; display:none; z-index:20; }
   .aviso.error{ background:var(--bad); }
   .historial{ white-space:pre-line; font-size:11px; color:var(--muted); margin-top:10px; }
+  .pie{ display:flex; justify-content:flex-end; margin-top:12px; }
+  .btn-eliminar{ background:none; border:0; color:var(--bad); font:inherit; font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; text-decoration:underline; cursor:pointer; padding:6px 0; }
+  .hoja .btn-eliminar{ flex:1 1 100%; text-align:center; margin-top:6px; }
+  .alerta{ font-size:13px; line-height:1.5; background:#f5e1e1; border-left:3px solid var(--bad); padding:10px 12px; margin-top:12px; }
 
   /* Pasos de agendado */
   .paso{ border-top:1px solid var(--line); margin-top:14px; padding-top:14px; }
@@ -377,6 +381,7 @@
           '<a class="btn sec" href="https://wa.me/' + String(r.celular).replace(/\D/g,'') + '" target="_blank">WhatsApp</a>' +
           '<button class="btn sec" onclick="irAReserva(\'' + r.id + '\')">Ver reserva</button>' +
           '<button class="btn sec" onclick="cerrarModal()">Cerrar</button>' +
+          '<button class="btn-eliminar" onclick="pedirEliminar(\'' + r.id + '\')">Eliminar reserva</button>' +
         '</div>';
     } else {
       h = '<span class="chip">Google Calendar</span><h3>' + esc(e.titulo) + '</h3>' +
@@ -463,6 +468,7 @@
       h += '<div class="acciones"><button class="btn sec" onclick="abrir(\'' + r.id + '\')">Mover la cita</button></div>' + formAgendar(r, false);
     }
     if (r.historial) h += '<div class="historial">' + esc(r.historial) + '</div>';
+    h += '<div class="pie"><button class="btn-eliminar" onclick="pedirEliminar(\'' + r.id + '\')">Eliminar reserva</button></div>';
     return h + '</div>';
   }
 
@@ -529,6 +535,30 @@
     s.className = n ? 'guardando' : '';
   }
   window.addEventListener('beforeunload', function(e){ if (COLA.length || OCUPADO) { e.preventDefault(); e.returnValue = ''; } });
+
+  /** Paso 1 de eliminar: ventana de confirmación (evita borrar por un mal clic). */
+  function pedirEliminar(id){
+    var r = reservaPorId(id); if (!r) return;
+    document.getElementById('hoja').innerHTML =
+      '<span class="chip bad">Eliminar reserva</span><h3>' + esc(r.nombre) + '</h3>' +
+      '<div class="fila"><span>Reserva</span>' + esc(r.servicio) + ' · ' + esc(r.id) + '</div>' +
+      '<div class="alerta">Se borra del panel y de la hoja' + (r.evento_id || r.fecha_cita ? ', y su evento de Google Calendar' : '') +
+        (r.comprobante_url ? '. El comprobante va a la papelera de Drive' : '') +
+        '. <b>No se le envía ningún correo a la clienta.</b> Esto no se puede deshacer desde el panel.</div>' +
+      '<div class="acciones"><button class="btn bad" onclick="eliminar(\'' + id + '\')">Sí, eliminar</button>' +
+      '<button class="btn sec" onclick="cerrarModal()">Cancelar</button></div>';
+    document.getElementById('modal').classList.add('abierto');
+  }
+  /** Paso 2: desaparece al instante; el servidor la borra de fondo. */
+  function eliminar(id){
+    cerrarModal();
+    DATOS.reservas = DATOS.reservas.filter(function(r){ return r.id !== id; });
+    quitarEventos(id);
+    pintar();
+    aviso('Reserva eliminada.');
+    COLA.push({ id: id, fn: 'eliminarReserva', args: [id], textoListo: 'Eliminada también de la hoja y del calendario ✓' });
+    procesarCola();
+  }
 
   function aprobar(id){
     accion(id, 'aprobarPago', [id], { estado: 'pago_aprobado', motivo: '' }, 'Pago aprobado. Enviando correo…', 'Correo "pago confirmado" enviado ✓');

@@ -261,6 +261,13 @@ function actualizarReserva_(r, cambios, nota) {
   Object.keys(cambios).forEach(function (k) { r[k] = cambios[k]; });
   r.actualizado = new Date();
   r.historial = (r.historial ? r.historial + '\n' : '') + fechaTexto_(new Date()) + ' · ' + nota;
+  // Si mientras tanto se eliminó otra reserva, las filas se corrieron: volver a ubicar esta por su id.
+  if (String(hoja.getRange(r._fila, 1).getValue()) !== r.id) {
+    var ids = hoja.getRange(1, 1, hoja.getLastRow(), 1).getValues().map(function (f) { return String(f[0]); });
+    var i = ids.indexOf(r.id);
+    if (i < 0) throw new Error('La reserva ' + r.id + ' ya no existe.');
+    r._fila = i + 1;
+  }
   var rango = hoja.getRange(r._fila, 1, 1, COLUMNAS.length);
   rango.setNumberFormat('@');
   rango.setValues([COLUMNAS.map(function (c) { return valorCelda_(r[c]); })]);
@@ -442,6 +449,27 @@ function confirmarCita(id) {
   } catch (e) { console.warn('No se pudo actualizar el evento: ' + e); }
   actualizarReserva_(r, { estado: ESTADOS.CITA_CONFIRMADA }, 'cita confirmada a la clienta ' + r.fecha_cita + ' ' + r.hora_inicio + '–' + r.hora_fin);
   return respuesta_(r, enviarCorreo_('citaConfirmada', r));
+}
+
+/**
+ * Elimina una reserva (pruebas, duplicadas…): borra su evento de Calendar, manda el comprobante
+ * a la papelera de Drive (se puede recuperar 30 días) y quita la fila de la hoja. No envía correos.
+ */
+function eliminarReserva(id) {
+  exigirAdmin_();
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var r = buscarReserva_(id); // fila leída dentro del candado, así no se borra otra por error
+    borrarEvento_(r);
+    if (r.comprobante_id) {
+      try { DriveApp.getFileById(r.comprobante_id).setTrashed(true); } catch (e) { /* ya no existe */ }
+    }
+    obtenerHoja_().deleteRow(r._fila);
+  } finally {
+    lock.releaseLock();
+  }
+  return { eliminada: id };
 }
 
 function tituloEvento_(r) { return r.servicio + ' · ' + r.nombre; }
