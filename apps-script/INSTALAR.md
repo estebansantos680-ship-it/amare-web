@@ -41,7 +41,17 @@ El HTML de cada template está en `/emails` (se genera con `tools/generar_correo
 En cada template: To Email `{{correo}}`, From Name `Amarë Beauty Center`, Reply To `facturas@amarecr.com`.
 
 ## Reglas de disponibilidad
-- Domingo y lunes cerrados. Cupo de 4 por franja (mañana 9–13, tarde 13–18).
-- Pago por validar pesa 0,6; pago aprobado o cita confirmada pesa 1; rechazadas no cuentan.
-- Servicios de más de 4 h ocupan mañana y tarde.
-- El admin puede superponer citas al confirmar; el bloqueo solo afecta la reserva en línea.
+- Domingo y lunes cerrados para la web. Se puede reservar en línea hasta el 31/12/2030 (`FECHA_MAX` en `js/booking.js`).
+- Cada reserva ocupa espacio desde que entra (pago por validar, aprobado, agendada o confirmada).
+- Tope de seguridad: `CONFIG.TOPE_DIA` (6) reservas por día, sin importar la franja.
+- Matriz por categoría: pestaña **Reglas** de la hoja "Amarë · Reservas" (copiada del Blueprint la primera vez).
+  Si el día ya tiene las categorías "Existente 1-3" y alguien pide la "Solicitado":
+  - **No permitir** → ese servicio se cierra ese día (franja o día completo).
+  - **Requiere aprobación** → se acepta, la clienta ve el aviso y el panel la marca "Requiere aprobación".
+  Se edita directamente en la hoja; no hay que volver a publicar.
+- El admin puede superponer citas al agendar; los bloqueos solo afectan la reserva en línea.
+
+## Estados
+pago_por_validar → pago_aprobado → cita_agendada → cita_confirmada → completada / no_asistio
+(rechazada, día saturado, cancelada). "Eliminar" en el panel solo oculta: la fila queda con estado `eliminada`.
+Las citas confirmadas pasan solas a `completada` al terminar (disparador cada 15 min).
