@@ -276,7 +276,8 @@
   // el servidor (API_URL ?accion=disponibilidad). Se consulta de nuevo al entrar
   // al paso 3, así un rechazo del admin libera el día con solo refrescar.
   var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-  var DIAS_ADELANTE = 90;
+  // Hasta dónde se puede reservar en línea (último día incluido).
+  var FECHA_MAX = new Date(2030, 11, 31, 23, 59);
   var bloqueos = {};
   var mesVisible = null;
 
@@ -305,11 +306,30 @@
     var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
     if (d < hoy) return 'pasado';
     if (d.getDay() === 0 || d.getDay() === 1) return 'cerrado';
-    var limite = new Date(hoy.getTime() + DIAS_ADELANTE * 864e5);
-    if (d > limite) return 'lejos';
+    if (d > FECHA_MAX) return 'lejos';
     var b = bloqueos[iso];
     if (b && ((b.manana && b.tarde) || (esServicioLargo() && (b.manana || b.tarde)))) return 'lleno';
     return null;
+  }
+
+  function capitalizar(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
+
+  // Selectores de mes y año para saltar rápido a fechas lejanas (hasta FECHA_MAX).
+  function selectorMes(y, m, minMes, maxMes) {
+    var h = '<select class="cal-mes" aria-label="Mes">';
+    MESES.forEach(function (nombre, i) {
+      var f = new Date(y, i, 1);
+      var fuera = f < minMes || f > maxMes;
+      h += '<option value="' + i + '"' + (i === m ? ' selected' : '') + (fuera ? ' disabled' : '') + '>' + capitalizar(nombre) + '</option>';
+    });
+    return h + '</select>';
+  }
+  function selectorAnio(y, minMes, maxMes) {
+    var h = '<select class="cal-anio" aria-label="Año">';
+    for (var a = minMes.getFullYear(); a <= maxMes.getFullYear(); a++) {
+      h += '<option value="' + a + '"' + (a === y ? ' selected' : '') + '>' + a + '</option>';
+    }
+    return h + '</select>';
   }
 
   function renderCalendario() {
@@ -322,12 +342,11 @@
     var diasMes = new Date(y, m + 1, 0).getDate();
     var desfase = (primero.getDay() + 6) % 7; // la semana inicia en lunes
     var minMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    var tope = new Date(hoy.getTime() + DIAS_ADELANTE * 864e5);
-    var maxMes = new Date(tope.getFullYear(), tope.getMonth(), 1);
+    var maxMes = new Date(FECHA_MAX.getFullYear(), FECHA_MAX.getMonth(), 1);
 
     var h = '<div class="cal-head">' +
       '<button type="button" class="cal-nav" data-mes="-1"' + (primero <= minMes ? ' disabled' : '') + ' aria-label="Mes anterior">‹</button>' +
-      '<strong>' + MESES[m].charAt(0).toUpperCase() + MESES[m].slice(1) + ' ' + y + '</strong>' +
+      '<span class="cal-sel">' + selectorMes(y, m, minMes, maxMes) + selectorAnio(y, minMes, maxMes) + '</span>' +
       '<button type="button" class="cal-nav" data-mes="1"' + (primero >= maxMes ? ' disabled' : '') + ' aria-label="Mes siguiente">›</button></div>' +
       '<div class="cal-grid">' + ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(function (d) { return '<span class="cal-dow">' + d + '</span>'; }).join('');
     for (var i = 0; i < desfase; i++) h += '<span></span>';
@@ -341,6 +360,19 @@
     h += '</div><p class="cal-leyenda"><span class="punto libre"></span>Disponible <span class="punto lleno"></span>Lleno <span class="punto cerrado"></span>Cerrado</p>';
     cont.innerHTML = h;
   }
+
+  document.addEventListener('change', function (e) {
+    if (!e.target.matches || !e.target.matches('.cal-mes, .cal-anio')) return;
+    var cont = document.getElementById('calendario');
+    var y = Number(cont.querySelector('.cal-anio').value), m = Number(cont.querySelector('.cal-mes').value);
+    var hoy = new Date(), minMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    var maxMes = new Date(FECHA_MAX.getFullYear(), FECHA_MAX.getMonth(), 1);
+    var f = new Date(y, m, 1);
+    if (f < minMes) f = minMes;
+    if (f > maxMes) f = maxMes;
+    mesVisible = f;
+    renderCalendario();
+  });
 
   document.addEventListener('click', function (e) {
     var nav = e.target.closest && e.target.closest('.cal-nav');

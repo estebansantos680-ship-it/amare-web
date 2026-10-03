@@ -761,6 +761,8 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
 .calendario{ border:1px solid var(--line); background:#fff; padding:14px; max-width:420px; }
 .cal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
 .cal-head strong{ font-family:var(--serif); font-weight:400; font-size:1.15rem; }
+.cal-sel{ display:flex; gap:6px; }
+.cal-sel select{ font-family:var(--serif); font-size:1.05rem; border:1px solid var(--line); background:transparent; padding:5px 6px; cursor:pointer; color:inherit; }
 .cal-nav{ width:36px; height:36px; border:1px solid var(--line); background:transparent; font-size:1.2rem; cursor:pointer; }
 .cal-nav:disabled{ opacity:.25; cursor:default; }
 .cal-grid{ display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; }
