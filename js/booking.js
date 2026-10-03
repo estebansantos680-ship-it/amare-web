@@ -272,13 +272,15 @@
 
   /* ---------- Paso 3: fecha y franja ---------- */
   // Calendario propio: el selector nativo no permite bloquear días específicos.
-  // Se bloquean días pasados, domingos y lunes, y los días/franjas llenos según
-  // el servidor (API_URL ?accion=disponibilidad). Se consulta de nuevo al entrar
-  // al paso 3, así un rechazo del admin libera el día con solo refrescar.
+  // Se bloquean días pasados, domingos y lunes, y los días llenos según el servidor
+  // (API_URL ?accion=disponibilidad): cada reserva ocupa espacio desde que entra,
+  // hay un tope de reservas por día y la matriz de reglas (pestaña "Reglas" de la hoja)
+  // decide por categoría (No permitir / Requiere aprobación). Se consulta de nuevo al
+  // entrar al paso 3, así un rechazo o cancelación libera el día con solo refrescar.
   var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   // Hasta dónde se puede reservar en línea (último día incluido).
   var FECHA_MAX = new Date(2030, 11, 31, 23, 59);
-  var bloqueos = {};
+  var dispo = { dias: {}, reglas: [], tope: 6 };
   var mesVisible = null;
 
   function toLocalISODate(d) {
@@ -292,9 +294,32 @@
     if (!API_URL) return Promise.resolve();
     return fetch(API_URL + '?accion=disponibilidad&t=' + Date.now())
       .then(function (r) { return r.json(); })
-      .then(function (j) { if (j && j.ok) bloqueos = j.bloqueos || {}; })
+      .then(function (j) { if (j && j.ok && j.dias) dispo = { dias: j.dias, reglas: j.reglas || [], tope: j.tope || 6 }; })
       .catch(function () { /* sin conexión al servidor: solo se bloquean días cerrados */ });
   }
+
+  function norm(t) {
+    return String(t == null ? '' : t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  // Misma lógica que el servidor (Codigo.gs → evaluarDia_): { accion: 'permitir' | 'aprobacion' | 'bloquear', mensaje }
+  function evaluarDia(iso, franja) {
+    var dia = dispo.dias[iso] || { total: 0, cats: {} };
+    if (dia.total >= dispo.tope) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' };
+    var cat = norm(state.service && state.service.categoria), fr = norm(franja);
+    var res = { accion: 'permitir', mensaje: '' };
+    dispo.reglas.forEach(function (g) {
+      if (g.solicitado !== cat) return;
+      if (g.franja && g.franja !== 'cualquier hora' && g.franja !== fr) return;
+      var faltan = {};
+      g.existentes.forEach(function (e) { faltan[e] = (faltan[e] || 0) + 1; });
+      for (var e in faltan) if ((dia.cats[e] || 0) < faltan[e]) return;
+      if (g.accion === 'no permitir') res = { accion: 'bloquear', mensaje: g.mensaje || 'Ese día ya no tenemos espacio para este servicio.' };
+      else if (res.accion !== 'bloquear') res = { accion: 'aprobacion', mensaje: g.mensaje || MENSAJE_APROBACION };
+    });
+    return res;
+  }
+  var MENSAJE_APROBACION = 'Este servicio requiere validación del equipo AMARË antes de confirmar la reserva.';
 
   function esServicioLargo() {
     return state.tier && Number(state.tier.durMax) > 4;
@@ -307,8 +332,7 @@
     if (d < hoy) return 'pasado';
     if (d.getDay() === 0 || d.getDay() === 1) return 'cerrado';
     if (d > FECHA_MAX) return 'lejos';
-    var b = bloqueos[iso];
-    if (b && ((b.manana && b.tarde) || (esServicioLargo() && (b.manana || b.tarde)))) return 'lleno';
+    if (evaluarDia(iso, 'Mañana').accion === 'bloquear' && evaluarDia(iso, 'Tarde').accion === 'bloquear') return 'lleno';
     return null;
   }
 
@@ -403,10 +427,8 @@
   }
 
   function actualizarFranjas() {
-    var b = (state.fecha && bloqueos[state.fecha]) || {};
     els.franjaButtons.forEach(function (btn) {
-      var key = btn.getAttribute('data-franja') === 'Tarde' ? 'tarde' : 'manana';
-      var llena = !!b[key];
+      var llena = !!state.fecha && evaluarDia(state.fecha, btn.getAttribute('data-franja')).accion === 'bloquear';
       btn.disabled = llena;
       btn.classList.toggle('llena', llena);
       btn.textContent = btn.getAttribute('data-franja') + (llena ? ' · lleno' : '');
@@ -427,6 +449,11 @@
     els.availabilityResult.textContent =
       '¡Excelente elección! Solicitaremos tu espacio para el ' + fechaLegible(state.fecha).toLowerCase() +
       ' en la ' + state.franja.toLowerCase() + '. Nuestro equipo te confirma la hora exacta.';
+    var ev = evaluarDia(state.fecha, state.franja);
+    if (ev.accion === 'aprobacion') {
+      els.availabilityResult.className = 'availability-result review';
+      els.availabilityResult.textContent += ' ' + ev.mensaje;
+    }
     els.toStep4.disabled = false;
   }
 
@@ -991,7 +1018,7 @@
             prepararPaso3();
             els.availabilityResult.hidden = false;
             els.availabilityResult.className = 'availability-result full';
-            els.availabilityResult.textContent = 'Justo se llenó ese espacio. Elige otra fecha o franja, por favor.';
+            els.availabilityResult.textContent = (resp.mensaje ? resp.mensaje + ' ' : 'Justo se llenó ese espacio. ') + 'Elige otra fecha o franja, por favor.';
             return;
           }
           throw new Error(resp.error || 'respuesta inválida');

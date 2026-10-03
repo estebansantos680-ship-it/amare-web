@@ -6,15 +6,16 @@
  *  - Recibe cada reserva del sitio (doPost): la guarda en la hoja "Reservas",
  *    guarda el comprobante en Drive, avisa a facturas@ y envía al cliente el
  *    correo "Solicitud recibida" (EmailJS).
- *  - Publica los días/franjas llenos (doGet ?accion=disponibilidad) para que la
- *    reserva en línea no los ofrezca.
+ *  - Publica la ocupación de cada día (doGet ?accion=disponibilidad) y la matriz de
+ *    reglas (pestaña "Reglas" de la hoja) para que la reserva en línea cierre lo lleno.
  *  - Sirve el panel de administración (doGet sin parámetros), solo para
  *    facturas@amarecr.com con sesión de Google.
  *  - Envía el recordatorio 24 h antes de cada cita confirmada (disparador horario).
  *
  * Ciclo de estados:
- *   pago_por_validar → pago_aprobado → cita_confirmada
- *                    ↘ pago_rechazado   ↘ dia_saturado → (nueva fecha) → cita_confirmada
+ *   pago_por_validar → pago_aprobado → cita_agendada → cita_confirmada → completada / no_asistio
+ *                    ↘ pago_rechazado   ↘ dia_saturado → (nueva fecha) ↗
+ *   Cualquiera puede pasar a cancelada o eliminada (eliminada solo se oculta; la fila queda).
  *
  * Instalación: ver apps-script/INSTALAR.md
  */
@@ -25,8 +26,7 @@ var CONFIG = {
   // Publicación "Panel admin" (acceso: solo facturas@). La otra publicación es la API pública.
   PANEL_URL: 'https://script.google.com/a/macros/amarecr.com/s/AKfycbyNGq-K0H7scCaGoJwNtsLFgL7YcKL2q4UHhXm9V01VIWo0rPPoyQJQKNrd1sJ2vLVM/exec',
   ZONA: 'America/Costa_Rica',
-  CUPO_POR_FRANJA: 4,          // Pendientes P-011: 4 servicios en la mañana y 4 en la tarde
-  PESO_PAGO_POR_VALIDAR: 0.6,  // se asume que ~60% de los comprobantes son reales
+  TOPE_DIA: 6,                 // tope de seguridad: máximo de reservas por día, sin importar la franja
   DIAS_CERRADOS: [0, 1],       // domingo y lunes
   HORA_MANANA: [9, 13],        // la mañana va de 9:00 a 13:00
   HORA_TARDE: [13, 18],        // la tarde de 13:00 a 18:00
@@ -62,20 +62,143 @@ var ESTADOS = {
   DIA_SATURADO: 'dia_saturado',
   CITA_AGENDADA: 'cita_agendada',     // ya está en Google Calendar, falta confirmarle a la clienta
   CITA_CONFIRMADA: 'cita_confirmada',
-  CANCELADA: 'cancelada'
+  CANCELADA: 'cancelada',
+  COMPLETADA: 'completada',           // la cita ya pasó (automático al terminar o manual)
+  NO_ASISTIO: 'no_asistio',
+  ELIMINADA: 'eliminada'              // oculta del panel; la fila se conserva en la hoja
 };
+
+/** Reservas que ocupan espacio en el día (desde que entran, aunque el pago no esté validado). */
+var ESTADOS_ACTIVOS = ['pago_por_validar', 'pago_aprobado', 'cita_agendada', 'cita_confirmada'];
+
+/**
+ * Matriz inicial de reglas (AMARE_Blueprint_AppCitas.xlsx → Reglas_Operativas).
+ * Se copia una sola vez a la pestaña "Reglas" de la hoja; desde ahí el salón la edita sin tocar código.
+ * [existente 1, existente 2, existente 3, solicitado, franja, acción, mensaje para la clienta]
+ * Lectura: si el día ya tiene las categorías existentes y alguien pide la "solicitada":
+ *   No permitir → se cierra ese servicio ese día · Requiere aprobación → se acepta, sujeto a validación.
+ */
+var REGLAS_INICIALES = [
+  ["Técnica de Color", "Alisamientos Capilares", "Alisamientos Capilares", "Alisamientos Capilares", "Mañana", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Alisamientos Capilares", "Alisamientos Capilares", "Alisamientos Capilares", "Tarde", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Alisamientos Capilares", "Color Parejo", "Color Parejo", "Mañana", "Permitir", ""],
+  ["Técnica de Color", "Alisamientos Capilares", "Cirugia Capilar", "Cirugia Capilar", "Mañana", "Permitir", ""],
+  ["Técnica de Color", "Alisamientos Capilares", "Corte de cabello", "Corte de cabello", "Mañana", "Permitir", ""],
+  ["Técnica de Color", "Alisamientos Capilares", "Tratamientos Capilares", "Tratamientos Capilares", "Mañana", "Permitir", ""],
+  ["Técnica de Color", "Alisamientos Capilares", "Cirugia Capilar", "Tratamientos Capilares", "Mañana", "Permitir", ""],
+  ["Técnica de Color", "Alisamientos Capilares", "Cirugia Capilar", "Corte de cabello", "Mañana", "Permitir", ""],
+  ["Técnica de Color", "Alisamientos Capilares", "Tratamientos Capilares", "Corte de cabello", "Mañana", "Permitir", ""],
+  ["Técnica de Color", "Alisamientos Capilares", "Color Parejo", "Color Parejo", "Tarde", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Alisamientos Capilares", "Cirugia Capilar", "Cirugia Capilar", "Tarde", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Alisamientos Capilares", "Corte de cabello", "Corte de cabello", "Tarde", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Alisamientos Capilares", "Tratamientos Capilares", "Tratamientos Capilares", "Tarde", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Alisamientos Capilares", "Cirugia Capilar", "Tratamientos Capilares", "Tarde", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Alisamientos Capilares", "Cirugia Capilar", "Corte de cabello", "Tarde", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Alisamientos Capilares", "Tratamientos Capilares", "Corte de cabello", "Tarde", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Técnica de Color", "Técnica de Color", "Técnica de Color", "Cualquier hora", "No permitir", "Este horario no está disponible para este servicio. Te sugerimos elegir otra hora o escribirnos por WhatsApp."],
+  ["Técnica de Color", "Técnica de Color", "Color Parejo", "Color Parejo", "Cualquier hora", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Técnica de Color", "Cirugia Capilar", "Cirugia Capilar", "Cualquier hora", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Técnica de Color", "Corte de cabello", "Corte de cabello", "Cualquier hora", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Técnica de Color", "Tratamientos Capilares", "Tratamientos Capilares", "Cualquier hora", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Técnica de Color", "Alisamientos Capilares", "Cirugia Capilar", "Cualquier hora", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Técnica de Color", "Alisamientos Capilares", "Tratamientos Capilares", "Cualquier hora", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Técnica de Color", "Cirugia Capilar", "Tratamientos Capilares", "Cualquier hora", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Técnica de Color", "Cirugia Capilar", "Corte de cabello", "Cualquier hora", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Técnica de Color", "Tratamientos Capilares", "Corte de cabello", "Cualquier hora", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Técnica de Color", "Alisamientos Capilares", "Corte de cabello", "Cualquier hora", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Técnica de Color", "Cirugia Capilar", "Color Parejo", "Color Parejo", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Cirugia Capilar", "Cirugia Capilar", "Cirugia Capilar", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Cirugia Capilar", "Corte de cabello", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Cirugia Capilar", "Tratamientos Capilares", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Cirugia Capilar", "Color Parejo", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Cirugia Capilar", "Color Parejo", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Cirugia Capilar", "Tratamientos Capilares", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Tratamientos Capilares", "Color Parejo", "Color Parejo", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Tratamientos Capilares", "Cirugia Capilar", "Cirugia Capilar", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Tratamientos Capilares", "Corte de cabello", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Tratamientos Capilares", "Tratamientos Capilares", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Tratamientos Capilares", "Color Parejo", "Cirugia Capilar", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Tratamientos Capilares", "Cirugia Capilar", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Tratamientos Capilares", "Cirugia Capilar", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Color Parejo", "Color Parejo", "Color Parejo", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Color Parejo", "Cirugia Capilar", "Cirugia Capilar", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Color Parejo", "Corte de cabello", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Color Parejo", "Tratamientos Capilares", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Color Parejo", "Cirugia Capilar", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Color Parejo", "Cirugia Capilar", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Color Parejo", "Tratamientos Capilares", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Corte de cabello", "Color Parejo", "Color Parejo", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Corte de cabello", "Cirugia Capilar", "Cirugia Capilar", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Corte de cabello", "Corte de cabello", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Corte de cabello", "Tratamientos Capilares", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Corte de cabello", "Cirugia Capilar", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Técnica de Color", "Corte de cabello", "Tratamientos Capilares", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Alisamientos Capilares", "Ninguno", "Cualquier hora", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Alisamientos Capilares", "Alisamientos Capilares", "Cualquier hora", "Requiere aprobación", "Este servicio requiere validación del equipo AMARË antes de confirmar la reserva."],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "", "", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Color Parejo", "Color Parejo", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Color Parejo", "Cirugia Capilar", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Color Parejo", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Color Parejo", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Cirugia Capilar", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Cirugia Capilar", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Tratamientos Capilares", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Cirugia Capilar", "Color Parejo", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Cirugia Capilar", "Cirugia Capilar", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Cirugia Capilar", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Cirugia Capilar", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Tratamientos Capilares", "Color Parejo", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Tratamientos Capilares", "Cirugia Capilar", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Tratamientos Capilares", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Tratamientos Capilares", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Corte de cabello", "Color Parejo", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Corte de cabello", "Cirugia Capilar", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Corte de cabello", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Alisamientos Capilares", "Corte de cabello", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Cirugia Capilar", "Color Parejo", "Color Parejo", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Cirugia Capilar", "Cirugia Capilar", "Cirugia Capilar", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Cirugia Capilar", "Corte de cabello", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Cirugia Capilar", "Tratamientos Capilares", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Cirugia Capilar", "Color Parejo", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Cirugia Capilar", "Tratamientos Capilares", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Tratamientos Capilares", "Color Parejo", "Color Parejo", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Tratamientos Capilares", "Cirugia Capilar", "Cirugia Capilar", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Tratamientos Capilares", "Corte de cabello", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Tratamientos Capilares", "Tratamientos Capilares", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Tratamientos Capilares", "Cirugia Capilar", "Color Parejo", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Tratamientos Capilares", "Cirugia Capilar", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Color Parejo", "Color Parejo", "Color Parejo", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Color Parejo", "Cirugia Capilar", "Cirugia Capilar", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Color Parejo", "Corte de cabello", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Color Parejo", "Tratamientos Capilares", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Color Parejo", "Tratamientos Capilares", "Cirugia Capilar", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Color Parejo", "Cirugia Capilar", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Corte de cabello", "Color Parejo", "Color Parejo", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Corte de cabello", "Cirugia Capilar", "Cirugia Capilar", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Corte de cabello", "Corte de cabello", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Corte de cabello", "Tratamientos Capilares", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Corte de cabello", "Tratamientos Capilares", "Color Parejo", "Cualquier hora", "Permitir", ""],
+  ["Alisamientos Capilares", "Corte de cabello", "Cirugia Capilar", "Color Parejo", "Cualquier hora", "Permitir", ""],
+  ["Corte de cabello", "Corte de cabello", "Corte de cabello", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Cirugia Capilar", "Cirugia Capilar", "Cirugia Capilar", "Cirugia Capilar", "Cualquier hora", "Permitir", ""],
+  ["Tratamientos Capilares", "Tratamientos Capilares", "Tratamientos Capilares", "Tratamientos Capilares", "Cualquier hora", "Permitir", ""],
+  ["Corte de cabello", "Corte de cabello", "Corte de cabello", "Corte de cabello", "Cualquier hora", "Permitir", ""],
+  ["Color Parejo", "Color Parejo", "Color Parejo", "Color Parejo", "Cualquier hora", "Permitir", ""]
+];
 
 var COLUMNAS = [
   'id', 'creado', 'estado', 'nombre', 'celular', 'correo', 'categoria', 'servicio', 'codigo', 'largo',
   'precio_min', 'precio_max', 'dur_min_h', 'dur_max_h', 'fecha_solicitada', 'franja', 'horario_sugerido',
   'deposito', 'descripcion_sinpe', 'comentarios', 'comprobante_url', 'comprobante_id',
-  'fecha_cita', 'hora_inicio', 'hora_fin', 'evento_id', 'motivo', 'recordatorio_enviado', 'actualizado', 'historial'
+  'fecha_cita', 'hora_inicio', 'hora_fin', 'evento_id', 'motivo', 'recordatorio_enviado', 'actualizado', 'historial',
+  'requiere_aprobacion'
 ];
 
 // ------------------------------------------------------------------ Instalación (ejecutar una vez)
 function instalar() {
   var props = PropertiesService.getScriptProperties();
   var hoja = obtenerHoja_();
+  obtenerReglas_();
   if (!props.getProperty('CARPETA_ID')) {
     var carpeta = DriveApp.createFolder('Amarë · Comprobantes de pago');
     props.setProperty('CARPETA_ID', carpeta.getId());
@@ -105,15 +228,49 @@ function obtenerHoja_() {
     hoja.getRange(1, 1, hoja.getMaxRows(), COLUMNAS.length).setNumberFormat('@');
     hoja.getRange(1, 1, 1, COLUMNAS.length).setValues([COLUMNAS]).setFontWeight('bold');
     hoja.setFrozenRows(1);
+  } else if (hoja.getLastColumn() < COLUMNAS.length) {
+    // Columnas nuevas (p. ej. requiere_aprobacion): se agregan al encabezado sin tocar los datos.
+    hoja.getRange(1, 1, 1, COLUMNAS.length).setValues([COLUMNAS]).setFontWeight('bold');
   }
   return hoja;
+}
+
+// ------------------------------------------------------------------ Matriz de reglas (pestaña "Reglas")
+function obtenerReglas_() {
+  var libro = obtenerHoja_().getParent();
+  var hoja = libro.getSheetByName('Reglas');
+  if (!hoja) {
+    hoja = libro.insertSheet('Reglas');
+    var cab = ['Existente 1', 'Existente 2', 'Existente 3', 'Solicitado', 'Franja', 'Acción', 'Mensaje para la clienta'];
+    hoja.getRange(1, 1, 1, cab.length).setValues([cab]).setFontWeight('bold');
+    hoja.getRange(2, 1, REGLAS_INICIALES.length, cab.length).setValues(REGLAS_INICIALES);
+    hoja.setFrozenRows(1);
+    hoja.getRange(1, 9).setValue('Acción: Permitir / Requiere aprobación / No permitir · Franja: Mañana / Tarde / Cualquier hora · Existentes vacíos = no se exigen.');
+  }
+  var filas = hoja.getLastRow() > 1 ? hoja.getRange(2, 1, hoja.getLastRow() - 1, 7).getValues() : [];
+  return filas.map(function (f) {
+    return {
+      existentes: [f[0], f[1], f[2]].map(norm_).filter(String),
+      solicitado: norm_(f[3]), franja: norm_(f[4]), accion: norm_(f[5]), mensaje: String(f[6] || '').trim()
+    };
+  }).filter(function (g) { return g.solicitado && (g.accion === 'no permitir' || g.accion === 'requiere aprobacion'); });
+}
+
+/** "Cirugía Capilar " → "cirugia capilar" (las categorías del sitio y del Excel no coinciden en tildes/mayúsculas). */
+function norm_(t) {
+  return String(t == null ? '' : t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
 // ------------------------------------------------------------------ Web: entradas
 function doGet(e) {
   var accion = (e && e.parameter && e.parameter.accion) || '';
   if (accion === 'disponibilidad') {
-    return json_({ ok: true, bloqueos: calcularBloqueos_() });
+    var dias = resumenDias_(leerReservas_());
+    return json_({
+      ok: true, dias: dias, tope: CONFIG.TOPE_DIA,
+      reglas: obtenerReglas_(),
+      bloqueos: bloqueosCompat_(dias) // para páginas con la versión anterior en caché
+    });
   }
   if (!esAdmin_()) {
     return HtmlService.createHtmlOutput(
@@ -149,12 +306,12 @@ function doPost(e) {
     var lock = LockService.getScriptLock();
     lock.waitLock(30000);
     try {
-      var b = calcularBloqueos_()[r.fecha_solicitada];
-      var franjaKey = r.franja === 'Tarde' ? 'tarde' : 'manana';
-      if (b && (b[franjaKey] || (r.dur_max_h > CONFIG.HORAS_SERVICIO_LARGO && (b.manana || b.tarde)))) {
+      var decision = evaluarDia_(resumenDias_(leerReservas_())[r.fecha_solicitada], r.categoria, r.franja, obtenerReglas_());
+      if (decision.accion === 'bloquear') {
         if (archivo) archivo.setTrashed(true);
-        return json_({ ok: false, error: 'franja_llena' });
+        return json_({ ok: false, error: 'franja_llena', mensaje: decision.mensaje });
       }
+      r.requiere_aprobacion = decision.accion === 'aprobacion' ? 'sí' : '';
       r.id = 'AM-' + Utilities.formatDate(new Date(), CONFIG.ZONA, 'yyMMdd-HHmmss') + '-' + Math.floor(Math.random() * 900 + 100);
       r.creado = new Date();
       r.historial = fechaTexto_(new Date()) + ' · reserva recibida desde la web';
@@ -166,11 +323,12 @@ function doPost(e) {
 
     avisarAdmin_(r);
     enviarCorreo_('solicitud', r, {
-      nota_pago: Number(r.deposito) > 0
+      nota_pago: (Number(r.deposito) > 0
         ? 'Recibimos su comprobante del depósito de ' + colones_(r.deposito) + '. Nuestro equipo lo validará y le confirmará la hora exacta de su cita.'
-        : 'Este servicio no requiere depósito. En breve le confirmamos la hora exacta de su cita.'
+        : 'Este servicio no requiere depósito. En breve le confirmamos la hora exacta de su cita.') +
+        (r.requiere_aprobacion ? ' ' + MENSAJE_APROBACION : '')
     });
-    return json_({ ok: true, id: r.id });
+    return json_({ ok: true, id: r.id, requiere_aprobacion: !!r.requiere_aprobacion });
   } catch (err) {
     console.error(err);
     return json_({ ok: false, error: 'error_servidor' });
@@ -275,51 +433,58 @@ function actualizarReserva_(r, cambios, nota) {
 }
 
 // ------------------------------------------------------------------ Cupos y disponibilidad
+// Regla: cada reserva ocupa espacio desde que entra (aunque el pago no esté validado).
+// El día se llena por la matriz de la pestaña "Reglas" (por categoría) o al llegar a TOPE_DIA reservas.
 function tieneHorario_(r) {
   return (r.estado === ESTADOS.CITA_CONFIRMADA || r.estado === ESTADOS.CITA_AGENDADA) && r.fecha_cita && r.hora_inicio && r.hora_fin;
 }
 
-function franjasQueOcupa_(r) {
-  if (tieneHorario_(r)) {
-    var ini = horaNumero_(r.hora_inicio), fin = horaNumero_(r.hora_fin);
-    var f = [];
-    if (ini < CONFIG.HORA_MANANA[1] && fin > CONFIG.HORA_MANANA[0]) f.push('manana');
-    if (ini < CONFIG.HORA_TARDE[1] && fin > CONFIG.HORA_TARDE[0]) f.push('tarde');
-    return f.length ? f : ['manana'];
-  }
-  if (Number(r.dur_max_h) > CONFIG.HORAS_SERVICIO_LARGO) return ['manana', 'tarde'];
-  return [r.franja === 'Tarde' ? 'tarde' : 'manana'];
-}
+function esActiva_(r) { return ESTADOS_ACTIVOS.indexOf(r.estado) >= 0; }
 
-function pesoDe_(r) {
-  if (r.estado === ESTADOS.PAGO_POR_VALIDAR) return CONFIG.PESO_PAGO_POR_VALIDAR;
-  if (r.estado === ESTADOS.PAGO_APROBADO || r.estado === ESTADOS.CITA_AGENDADA || r.estado === ESTADOS.CITA_CONFIRMADA) return 1;
-  return 0; // rechazadas, canceladas y "día saturado" (pendiente de nueva fecha) no ocupan cupo
-}
+function fechaDe_(r) { return tieneHorario_(r) ? r.fecha_cita : r.fecha_solicitada; }
 
-function calcularCarga_(reservas) {
-  var carga = {};
-  (reservas || leerReservas_()).forEach(function (r) {
-    var peso = pesoDe_(r);
-    if (!peso) return;
-    var fecha = tieneHorario_(r) ? r.fecha_cita : r.fecha_solicitada;
-    if (!fecha) return;
-    carga[fecha] = carga[fecha] || { manana: 0, tarde: 0, citas: 0 };
-    franjasQueOcupa_(r).forEach(function (f) { carga[fecha][f] += peso; });
-    carga[fecha].citas++;
+/** { 'yyyy-MM-dd': { total: n, cats: { 'tecnica de color': 2, ... } } } — solo conteos, sin datos personales. */
+function resumenDias_(reservas, excluirId) {
+  var dias = {};
+  reservas.forEach(function (r) {
+    if (!esActiva_(r) || r.id === excluirId) return;
+    var f = fechaDe_(r);
+    if (!f) return;
+    var d = dias[f] = dias[f] || { total: 0, cats: {} };
+    var c = norm_(r.categoria);
+    d.total++;
+    d.cats[c] = (d.cats[c] || 0) + 1;
   });
-  return carga;
+  return dias;
 }
 
-function calcularBloqueos_() {
-  var carga = calcularCarga_();
-  var bloqueos = {};
-  Object.keys(carga).forEach(function (fecha) {
-    var c = carga[fecha];
-    var m = c.manana >= CONFIG.CUPO_POR_FRANJA, t = c.tarde >= CONFIG.CUPO_POR_FRANJA;
-    if (m || t) bloqueos[fecha] = { manana: m, tarde: t };
+/**
+ * ¿Se puede pedir esta categoría ese día y franja? → { accion: 'permitir' | 'aprobacion' | 'bloquear', mensaje }
+ * Misma lógica que js/booking.js (evaluarDia), para que la página y el servidor decidan igual.
+ */
+function evaluarDia_(dia, categoria, franja, reglas) {
+  dia = dia || { total: 0, cats: {} };
+  if (dia.total >= CONFIG.TOPE_DIA) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' };
+  var cat = norm_(categoria), fr = norm_(franja), resultado = { accion: 'permitir', mensaje: '' };
+  reglas.forEach(function (g) {
+    if (g.solicitado !== cat) return;
+    if (g.franja && g.franja !== 'cualquier hora' && g.franja !== fr) return;
+    var faltan = {};
+    g.existentes.forEach(function (e) { faltan[e] = (faltan[e] || 0) + 1; });
+    for (var e in faltan) if ((dia.cats[e] || 0) < faltan[e]) return;
+    if (g.accion === 'no permitir') resultado = { accion: 'bloquear', mensaje: g.mensaje || 'Ese día ya no tenemos espacio para este servicio.' };
+    else if (resultado.accion !== 'bloquear') resultado = { accion: 'aprobacion', mensaje: g.mensaje || MENSAJE_APROBACION };
   });
-  return bloqueos;
+  return resultado;
+}
+
+var MENSAJE_APROBACION = 'Este servicio requiere validación del equipo AMARË antes de confirmar la reserva.';
+
+/** Días completos (tope diario) en el formato viejo { fecha: { manana, tarde } }. */
+function bloqueosCompat_(dias) {
+  var b = {};
+  Object.keys(dias).forEach(function (f) { if (dias[f].total >= CONFIG.TOPE_DIA) b[f] = { manana: true, tarde: true }; });
+  return b;
 }
 
 // ------------------------------------------------------------------ Panel de administración
@@ -335,15 +500,13 @@ function exigirAdmin_() {
 function panelDatos() {
   exigirAdmin_();
   var todas = leerReservas_(); // una sola lectura de la hoja para todo el panel
-  var reservas = todas.map(reservaPlana_).reverse();
+  var reservas = todas.filter(function (r) { return r.estado !== ESTADOS.ELIMINADA; }).map(reservaPlana_).reverse();
   // Agenda de Google Calendar: 2 semanas atrás y 4 meses adelante (el panel pide otros rangos con agenda()).
   var hoy = new Date();
   var desde = Utilities.formatDate(new Date(hoy.getTime() - 14 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
   var hasta = Utilities.formatDate(new Date(hoy.getTime() + 120 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
   return {
-    reservas: reservas, cupo: CONFIG.CUPO_POR_FRANJA,
-    // Reglas de cupo para que el panel recalcule al instante sin esperar al servidor.
-    reglas: { peso: CONFIG.PESO_PAGO_POR_VALIDAR, manana: CONFIG.HORA_MANANA, tarde: CONFIG.HORA_TARDE, largo: CONFIG.HORAS_SERVICIO_LARGO },
+    reservas: reservas, tope: CONFIG.TOPE_DIA, activos: ESTADOS_ACTIVOS,
     hoy: Utilities.formatDate(hoy, CONFIG.ZONA, 'yyyy-MM-dd'),
     agenda: agenda_(desde, hasta, todas), agendaDesde: desde, agendaHasta: hasta
   };
@@ -452,24 +615,44 @@ function confirmarCita(id) {
 }
 
 /**
- * Elimina una reserva (pruebas, duplicadas…): borra su evento de Calendar, manda el comprobante
- * a la papelera de Drive (se puede recuperar 30 días) y quita la fila de la hoja. No envía correos.
+ * "Eliminar" desde el panel: la reserva deja de verse y libera su espacio, pero la fila se conserva en la
+ * hoja (estado "eliminada") para no perder el registro. También quita su evento de Calendar. No envía correos.
  */
 function eliminarReserva(id) {
   exigirAdmin_();
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    var r = buscarReserva_(id); // fila leída dentro del candado, así no se borra otra por error
+  var r = buscarReserva_(id);
+  borrarEvento_(r);
+  actualizarReserva_(r, { estado: ESTADOS.ELIMINADA, evento_id: '' }, 'eliminada desde el panel (estado anterior: ' + r.estado + ')');
+  return respuesta_(r);
+}
+
+/**
+ * Cambios de estado sin correo (arrastrar entre pestañas o botones de la tarjeta).
+ * Solo se permiten estos destinos; los que envían correo tienen su propia función.
+ */
+var CAMBIOS_SIN_CORREO = {
+  completada: [ESTADOS.CITA_CONFIRMADA, ESTADOS.CITA_AGENDADA, ESTADOS.NO_ASISTIO],
+  no_asistio: [ESTADOS.CITA_CONFIRMADA, ESTADOS.CITA_AGENDADA, ESTADOS.COMPLETADA],
+  cancelada: [ESTADOS.PAGO_POR_VALIDAR, ESTADOS.PAGO_APROBADO, ESTADOS.DIA_SATURADO, ESTADOS.CITA_AGENDADA, ESTADOS.CITA_CONFIRMADA],
+  cita_confirmada: [ESTADOS.COMPLETADA, ESTADOS.NO_ASISTIO],          // deshacer "completada"
+  pago_por_validar: [ESTADOS.PAGO_RECHAZADO, ESTADOS.CANCELADA],     // reabrir
+  pago_aprobado: [ESTADOS.CANCELADA, ESTADOS.DIA_SATURADO]
+};
+
+function cambiarEstado(id, nuevo) {
+  exigirAdmin_();
+  var r = buscarReserva_(id);
+  var desde = CAMBIOS_SIN_CORREO[nuevo];
+  if (!desde || desde.indexOf(r.estado) < 0) throw new Error('No se puede pasar de "' + r.estado + '" a "' + nuevo + '".');
+  if (nuevo === ESTADOS.CITA_CONFIRMADA && !r.fecha_cita) throw new Error('Esa reserva no tiene fecha en el calendario.');
+  var cambios = { estado: nuevo };
+  if (nuevo === ESTADOS.CANCELADA || nuevo === ESTADOS.PAGO_POR_VALIDAR || nuevo === ESTADOS.PAGO_APROBADO) {
     borrarEvento_(r);
-    if (r.comprobante_id) {
-      try { DriveApp.getFileById(r.comprobante_id).setTrashed(true); } catch (e) { /* ya no existe */ }
-    }
-    obtenerHoja_().deleteRow(r._fila);
-  } finally {
-    lock.releaseLock();
+    cambios.evento_id = '';
+    cambios.fecha_cita = ''; cambios.hora_inicio = ''; cambios.hora_fin = '';
   }
-  return { eliminada: id };
+  actualizarReserva_(r, cambios, 'cambiada a ' + nuevo + ' desde el panel');
+  return respuesta_(r);
 }
 
 function tituloEvento_(r) { return r.servicio + ' · ' + r.nombre; }
@@ -483,6 +666,12 @@ function borrarEvento_(r) {
 function enviarRecordatorios() {
   var ahora = new Date().getTime();
   leerReservas_().forEach(function (r) {
+    // Cierre automático: una cita confirmada cuya hora de fin ya pasó queda como "completada".
+    if (r.estado === ESTADOS.CITA_CONFIRMADA && r.fecha_cita && r.hora_fin &&
+        fechaHora_(r.fecha_cita, r.hora_fin).getTime() < ahora) {
+      actualizarReserva_(r, { estado: ESTADOS.COMPLETADA }, 'completada automáticamente al terminar la cita');
+      return;
+    }
     if (r.estado !== ESTADOS.CITA_CONFIRMADA || r.recordatorio_enviado || !r.fecha_cita || !r.hora_inicio) return;
     var faltan = (fechaHora_(r.fecha_cita, r.hora_inicio).getTime() - ahora) / 36e5;
     if (faltan > 0 && faltan <= 24) {
@@ -585,6 +774,7 @@ function avisarAdmin_(r) {
     '<table cellpadding="8" style="border-collapse:collapse">' +
     filas.map(function (f) { return '<tr><td style="border-bottom:1px solid #eee;color:#8A7A63">' + f[0] + '</td><td style="border-bottom:1px solid #eee">' + esc_(f[1]) + '</td></tr>'; }).join('') +
     '</table>' +
+    (r.requiere_aprobacion ? '<p style="background:#f5ecd6;padding:10px 12px"><b>Requiere aprobación:</b> esta reserva completa una combinación de la matriz de reglas. Revísala antes de confirmar.</p>' : '') +
     (r.comprobante_url ? '<p><a href="' + r.comprobante_url + '">Ver comprobante en Drive</a> (también va adjunto)</p>' : '') +
     '<p><a href="' + url + '" style="background:#0B0B0B;color:#F5F3EF;padding:12px 20px;text-decoration:none;display:inline-block">Abrir panel de reservas</a></p></div>';
   var opciones = { htmlBody: html, name: 'Reservas Amarë', replyTo: r.correo };

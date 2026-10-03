@@ -44,7 +44,16 @@
   .aviso{ position:fixed; left:50%; bottom:16px; transform:translateX(-50%); width:max-content; max-width:calc(100% - 24px); background:var(--black); color:var(--cream); padding:12px 16px; font-size:13px; display:none; z-index:20; }
   .aviso.error{ background:var(--bad); }
   .historial{ white-space:pre-line; font-size:11px; color:var(--muted); margin-top:10px; }
-  .pie{ display:flex; justify-content:flex-end; margin-top:12px; }
+  .pie{ display:flex; justify-content:flex-end; gap:16px; margin-top:12px; }
+  .btn-mover{ background:none; border:0; color:var(--black); font:inherit; font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; text-decoration:underline; cursor:pointer; padding:6px 0; }
+  .manija{ cursor:grab; color:var(--taupe-deep); font-size:18px; line-height:1; user-select:none; padding:2px 4px; }
+  .manija:active{ cursor:grabbing; }
+  .card.arrastrando{ opacity:.45; }
+  body.modo-arrastre .tab:not(.activa){ outline:2px dashed var(--taupe); outline-offset:-4px; }
+  .tab.drop{ background:var(--sand) !important; color:var(--black) !important; outline:2px solid var(--black) !important; }
+  .opcion{ display:flex; flex-direction:column; gap:4px; margin-top:10px; }
+  .opcion small{ font-size:11px; color:var(--muted); }
+  @media (hover:none){ .manija{ display:none; } }
   .btn-eliminar{ background:none; border:0; color:var(--bad); font:inherit; font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; text-decoration:underline; cursor:pointer; padding:6px 0; }
   .hoja .btn-eliminar{ flex:1 1 100%; text-align:center; margin-top:6px; }
   .alerta{ font-size:13px; line-height:1.5; background:#f5e1e1; border-left:3px solid var(--bad); padding:10px 12px; margin-top:12px; }
@@ -133,7 +142,8 @@
 <div class="aviso" id="aviso"></div>
 
 <script>
-  var DATOS = { reservas: [], cupo: 4, agenda: [], hoy: '', reglas: { peso: .6, manana: [9,13], tarde: [13,18], largo: 4 } };
+  var DATOS = { reservas: [], tope: 6, activos: ['pago_por_validar','pago_aprobado','cita_agendada','cita_confirmada'], agenda: [], hoy: '' };
+  var ARRASTRANDO = null;  // id de la reserva que se está arrastrando hacia una pestaña
   var CARGA = {};          // fecha -> ocupación, calculada aquí mismo para que sea instantánea
   var CACHE = {};          // fecha -> eventos de Google Calendar de ese día
   var VISTA = [];          // eventos pintados en la agenda (para abrir el detalle)
@@ -175,31 +185,15 @@
   }
   function editando(){ var a = document.activeElement; return a && /INPUT|TEXTAREA|SELECT/.test(a.tagName); }
 
-  // ---------------------------------------------------------------- cupo (mismas reglas que el servidor)
+  // ---------------------------------------------------------------- cupo (mismo criterio que el servidor)
+  // Cada reserva activa ocupa un espacio desde que entra; tope de seguridad por día (la matriz decide por categoría).
   function tieneHorario(r){ return (r.estado === 'cita_confirmada' || r.estado === 'cita_agendada') && r.fecha_cita && r.hora_inicio && r.hora_fin; }
-  function pesoDe(r){
-    if (r.estado === 'pago_por_validar') return DATOS.reglas.peso;
-    return (r.estado === 'pago_aprobado' || r.estado === 'cita_agendada' || r.estado === 'cita_confirmada') ? 1 : 0;
-  }
-  function franjasDe(r){
-    var R = DATOS.reglas;
-    if (tieneHorario(r)) {
-      var a = horas(r.hora_inicio), b = horas(r.hora_fin), f = [];
-      if (a < R.manana[1] && b > R.manana[0]) f.push('manana');
-      if (a < R.tarde[1] && b > R.tarde[0]) f.push('tarde');
-      return f.length ? f : ['manana'];
-    }
-    if (Number(r.dur_max_h) > R.largo) return ['manana', 'tarde'];
-    return [r.franja === 'Tarde' ? 'tarde' : 'manana'];
-  }
   function calcularCarga(){
     CARGA = {};
     DATOS.reservas.forEach(function(r){
-      var p = pesoDe(r); if (!p) return;
+      if (DATOS.activos.indexOf(r.estado) < 0) return;
       var f = tieneHorario(r) ? r.fecha_cita : r.fecha_solicitada; if (!f) return;
-      CARGA[f] = CARGA[f] || { manana:0, tarde:0, citas:0 };
-      franjasDe(r).forEach(function(x){ CARGA[f][x] += p; });
-      CARGA[f].citas++;
+      CARGA[f] = (CARGA[f] || 0) + 1;
     });
   }
 
@@ -244,13 +238,14 @@
   // ---------------------------------------------------------------- pestañas
   function enTab(r, tab){
     if (tab === 'por_agendar') return r.estado === 'pago_aprobado' || r.estado === 'dia_saturado' || r.estado === 'cita_agendada';
-    if (tab === 'historial') return r.estado === 'pago_rechazado' || r.estado === 'cancelada';
+    if (tab === 'historial') return ['pago_rechazado', 'cancelada', 'completada', 'no_asistio'].indexOf(r.estado) >= 0;
     return r.estado === tab;
   }
   function pintarTabs(){
     document.getElementById('tabs').innerHTML = TABS.map(function(t){
       var n = t[0] === 'agenda' ? '' : '<span>' + DATOS.reservas.filter(function(r){ return enTab(r, t[0]); }).length + '</span>';
-      return '<button class="tab' + (TAB===t[0]?' activa':'') + '" onclick="irTab(\'' + t[0] + '\')">' + t[1] + n + '</button>';
+      var soltar = t[0] === 'agenda' ? '' : ' ondragover="sobreTab(event,this)" ondragleave="this.classList.remove(\'drop\')" ondrop="soltarEnTab(event,\'' + t[0] + '\',this)"';
+      return '<button class="tab' + (TAB===t[0]?' activa':'') + '"' + soltar + ' onclick="irTab(\'' + t[0] + '\')">' + t[1] + n + '</button>';
     }).join('');
   }
   function irTab(t){ TAB = t; pintar(); window.scrollTo(0, 0); }
@@ -274,7 +269,7 @@
   }
 
   // ---------------------------------------------------------------- columna de un día (agenda y vista previa)
-  function claseEvento(e){ return e.estado === 'cita_confirmada' ? 'ok' : (e.estado === 'cita_agendada' ? 'pend' : 'ext'); }
+  function claseEvento(e){ return (e.estado === 'cita_confirmada' || e.estado === 'completada') ? 'ok' : (e.estado === 'cita_agendada' ? 'pend' : 'ext'); }
 
   /** Reparte los eventos que se cruzan en carriles lado a lado. */
   function carriles(evs){
@@ -344,12 +339,12 @@
 
     h += '<div class="dia-cab" style="border-left:0"></div>';
     dias.forEach(function(f){
-      var c = CARGA[f];
-      var lleno = c && c.manana >= DATOS.cupo && c.tarde >= DATOS.cupo;
+      var c = CARGA[f] || 0;
+      var lleno = c >= DATOS.tope;
       var cerr = DIAS_CERRADOS.indexOf(fechaD(f).getDay()) >= 0;
       h += '<div class="dia-cab' + (f === DATOS.hoy ? ' hoy' : (cerr ? ' cerrado' : '')) + '"><b><span class="largo">' + fechaCorta(f) + '</span><span class="corto">' + diaCorto(f) + '</span></b>' +
-        (c ? '<small class="' + (lleno ? 'llena' : '') + '"><span class="largo">Cupo M ' + c.manana.toFixed(1) + '/' + DATOS.cupo + ' · T ' + c.tarde.toFixed(1) + '/' + DATOS.cupo + '</span>' +
-             '<span class="corto">M' + (+c.manana.toFixed(1)) + ' T' + (+c.tarde.toFixed(1)) + '</span></small>' : '<small>Libre</small>') + '</div>';
+        (c ? '<small class="' + (lleno ? 'llena' : '') + '"><span class="largo">' + c + '/' + DATOS.tope + ' reservas' + (lleno ? ' · lleno' : '') + '</span>' +
+             '<span class="corto">' + c + '/' + DATOS.tope + '</span></small>' : '<small>Libre</small>') + '</div>';
     });
     h += '<div class="extras" style="border-left:0"></div>';
     dias.forEach(function(f){
@@ -380,8 +375,9 @@
           (r.estado === 'cita_agendada' ? '<button class="btn ok" onclick="cerrarModal();confirmar(\'' + r.id + '\')">Confirmar y enviar correo</button>' : '') +
           '<a class="btn sec" href="https://wa.me/' + String(r.celular).replace(/\D/g,'') + '" target="_blank">WhatsApp</a>' +
           '<button class="btn sec" onclick="irAReserva(\'' + r.id + '\')">Ver reserva</button>' +
+          '<button class="btn sec" onclick="pedirMover(\'' + r.id + '\')">Mover a…</button>' +
           '<button class="btn sec" onclick="cerrarModal()">Cerrar</button>' +
-          '<button class="btn-eliminar" onclick="pedirEliminar(\'' + r.id + '\')">Eliminar reserva</button>' +
+          '<button class="btn-eliminar" onclick="pedirEliminar(\'' + r.id + '\')">Eliminar</button>' +
         '</div>';
     } else {
       h = '<span class="chip">Google Calendar</span><h3>' + esc(e.titulo) + '</h3>' +
@@ -396,16 +392,16 @@
 
   // ---------------------------------------------------------------- tarjetas
   function textoCarga(fecha){
-    var c = CARGA[fecha];
-    if (!c) return '<div class="carga">Cupo en línea de ese día: libre.</div>';
-    var lleno = c.manana >= DATOS.cupo && c.tarde >= DATOS.cupo;
-    return '<div class="carga' + (lleno?' llena':'') + '">Cupo en línea de ese día: mañana ' + c.manana.toFixed(1) + '/' + DATOS.cupo +
-      ' · tarde ' + c.tarde.toFixed(1) + '/' + DATOS.cupo + ' (' + c.citas + ' reservas). Tú decides si agendar igual.</div>';
+    var c = CARGA[fecha] || 0;
+    if (!c) return '<div class="carga">Ese día no tiene otras reservas.</div>';
+    var lleno = c >= DATOS.tope;
+    return '<div class="carga' + (lleno?' llena':'') + '">Ese día: ' + c + ' de ' + DATOS.tope + ' reservas' + (lleno ? ' (lleno para la web)' : '') + '. Tú decides si agendar igual.</div>';
   }
   function chipEstado(e){
     var m = { pago_por_validar:['Pago por validar','warn'], pago_aprobado:['Pago aprobado · por agendar','ok'], dia_saturado:['Día saturado · contactar','warn'],
               cita_agendada:['En calendario · falta confirmar','warn'], cita_confirmada:['Cita confirmada','ok'],
-              pago_rechazado:['Pago rechazado','bad'], cancelada:['Cancelada','bad'] }[e] || [e,''];
+              pago_rechazado:['Pago rechazado','bad'], cancelada:['Cancelada','bad'],
+              completada:['Completada','ok'], no_asistio:['No asistió','bad'] }[e] || [e,''];
     return '<span class="chip ' + m[1] + '">' + m[0] + '</span>';
   }
 
@@ -428,11 +424,13 @@
 
   function tarjeta(r){
     var h = '<div class="card" id="c-' + r.id + '">' +
-      '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><h3>' + esc(r.nombre) + '</h3>' + chipEstado(r.estado) + '</div>' +
+      '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start">' +
+        '<div style="display:flex;gap:10px;align-items:center"><span class="manija" draggable="true" title="Arrastra a otra pestaña para moverla" ondragstart="empezarArrastre(event,\'' + r.id + '\')" ondragend="terminarArrastre()">⠿</span><h3>' + esc(r.nombre) + '</h3></div>' +
+        '<div>' + chipEstado(r.estado) + (r.requiere_aprobacion ? ' <span class="chip warn" title="Completa una combinación de la matriz de reglas">Requiere aprobación</span>' : '') + '</div></div>' +
       '<p class="meta">' + esc(r.servicio) + ' · ' + esc(r.categoria) + ' · largo ' + esc(r.largo) + ' · reserva ' + esc(r.id) + '</p>' +
       '<div class="grid">' +
         '<div><span>Fecha solicitada</span>' + fechaLarga(r.fecha_solicitada) + ' · ' + esc(r.franja) + '</div>' +
-        ((r.estado==='cita_confirmada' || r.estado==='cita_agendada') ? '<div><span>En calendario</span>' + fechaLarga(r.fecha_cita) + ' · ' + h12(r.hora_inicio) + '–' + h12(r.hora_fin) + '</div>' : '') +
+        ((r.estado==='cita_confirmada' || r.estado==='cita_agendada' || ((r.estado==='completada' || r.estado==='no_asistio') && r.fecha_cita)) ? '<div><span>En calendario</span>' + fechaLarga(r.fecha_cita) + ' · ' + h12(r.hora_inicio) + '–' + h12(r.hora_fin) + '</div>' : '') +
         '<div><span>Depósito</span>' + (Number(r.deposito)>0 ? colones(r.deposito) : 'No requiere') + '</div>' +
         '<div><span>Descripción esperada SINPE</span>' + esc(r.descripcion_sinpe || '—') + '</div>' +
         '<div><span>Celular</span><a class="link" href="https://wa.me/' + String(r.celular).replace(/\D/g,'') + '" target="_blank">' + esc(r.celular) + '</a></div>' +
@@ -465,10 +463,20 @@
         '</div></div>' + formAgendar(r, false);
     }
     if (r.estado === 'cita_confirmada') {
-      h += '<div class="acciones"><button class="btn sec" onclick="abrir(\'' + r.id + '\')">Mover la cita</button></div>' + formAgendar(r, false);
+      h += '<div class="acciones">' +
+        '<button class="btn ok" onclick="cambiar(\'' + r.id + '\',\'completada\')">Completada</button>' +
+        '<button class="btn sec" onclick="cambiar(\'' + r.id + '\',\'no_asistio\')">No asistió</button>' +
+        '<button class="btn sec" onclick="abrir(\'' + r.id + '\')">Mover la cita</button></div>' + formAgendar(r, false);
+    }
+    if (r.estado === 'completada' || r.estado === 'no_asistio') {
+      h += '<div class="acciones"><button class="btn sec" onclick="cambiar(\'' + r.id + '\',\'cita_confirmada\')">Volver a confirmadas</button></div>';
+    }
+    if (r.estado === 'pago_rechazado' || r.estado === 'cancelada') {
+      h += '<div class="acciones"><button class="btn sec" onclick="cambiar(\'' + r.id + '\',\'pago_por_validar\')">Reabrir (volver a pagos por validar)</button></div>';
     }
     if (r.historial) h += '<div class="historial">' + esc(r.historial) + '</div>';
-    h += '<div class="pie"><button class="btn-eliminar" onclick="pedirEliminar(\'' + r.id + '\')">Eliminar reserva</button></div>';
+    h += '<div class="pie"><button class="btn-mover" onclick="pedirMover(\'' + r.id + '\')">Mover a…</button>' +
+      '<button class="btn-eliminar" onclick="pedirEliminar(\'' + r.id + '\')">Eliminar</button></div>';
     return h + '</div>';
   }
 
@@ -499,7 +507,8 @@
     Object.keys(cambios).forEach(function(k){ r[k] = cambios[k]; });
     if (r.estado === 'cita_agendada' && cambios.fecha_cita) ponerEvento(r);
     else if (cambios.estado === 'cita_confirmada') estadoEvento(id, 'cita_confirmada');
-    else if (cambios.estado === 'dia_saturado') quitarEventos(id);
+    else if (cambios.estado === 'dia_saturado' || cambios.estado === 'cancelada' || cambios.estado === 'pago_por_validar') quitarEventos(id);
+    else if (cambios.estado) estadoEvento(id, cambios.estado);
     pintar();
     aviso(textoYa);
     COLA.push({ id: id, fn: fn, args: args, textoListo: textoListo });
@@ -542,9 +551,8 @@
     document.getElementById('hoja').innerHTML =
       '<span class="chip bad">Eliminar reserva</span><h3>' + esc(r.nombre) + '</h3>' +
       '<div class="fila"><span>Reserva</span>' + esc(r.servicio) + ' · ' + esc(r.id) + '</div>' +
-      '<div class="alerta">Se borra del panel y de la hoja' + (r.evento_id || r.fecha_cita ? ', y su evento de Google Calendar' : '') +
-        (r.comprobante_url ? '. El comprobante va a la papelera de Drive' : '') +
-        '. <b>No se le envía ningún correo a la clienta.</b> Esto no se puede deshacer desde el panel.</div>' +
+      '<div class="alerta">Se quita del panel' + (r.evento_id || r.fecha_cita ? ' y de Google Calendar' : '') + ', y libera su espacio. ' +
+        '<b>El registro se conserva en la hoja de reservas</b> (marcado como eliminada), con su comprobante. No se envía ningún correo a la clienta.</div>' +
       '<div class="acciones"><button class="btn bad" onclick="eliminar(\'' + id + '\')">Sí, eliminar</button>' +
       '<button class="btn sec" onclick="cerrarModal()">Cancelar</button></div>';
     document.getElementById('modal').classList.add('abierto');
@@ -556,8 +564,101 @@
     quitarEventos(id);
     pintar();
     aviso('Reserva eliminada.');
-    COLA.push({ id: id, fn: 'eliminarReserva', args: [id], textoListo: 'Eliminada también de la hoja y del calendario ✓' });
+    COLA.push({ id: id, fn: 'eliminarReserva', args: [id], textoListo: 'Quitada del panel. El registro queda guardado en la hoja ✓' });
     procesarCola();
+  }
+
+  // ---------------------------------------------------------------- mover entre pestañas
+  var NOMBRE_TAB = { pago_por_validar: 'Pagos por validar', por_agendar: 'Por agendar', cita_confirmada: 'Confirmadas', historial: 'Historial' };
+
+  /** Qué se puede hacer al llevar una reserva a una pestaña. Cada opción dice si envía correo. */
+  function opcionesMover(r, tab){
+    var id = r.id, o = [], e = r.estado;
+    function op(texto, nota, fn, clase){ o.push({ texto: texto, nota: nota, fn: fn, clase: clase || '' }); }
+    if (tab === 'por_agendar') {
+      if (e === 'pago_por_validar') op('Aprobar pago', 'Se le envía el correo "pago confirmado".', function(){ aprobar(id); });
+      if (e === 'cita_confirmada') op('Cambiar fecha u hora', 'Abre el formulario para moverla.', function(){ irAReserva(id); abrir(id); }, 'sec');
+    }
+    if (tab === 'cita_confirmada') {
+      if (e === 'cita_agendada') op('Confirmar cita', 'Se le envía el correo "cita confirmada".', function(){ confirmar(id); }, 'ok');
+      if (e === 'pago_aprobado' || e === 'dia_saturado') return { motivo: 'Primero ponle fecha y hora en "Por agendar" (Paso 1).' };
+      if ((e === 'completada' || e === 'no_asistio') && r.fecha_cita) op('Volver a confirmadas', 'Sin correo.', function(){ cambiar(id, 'cita_confirmada'); }, 'sec');
+    }
+    if (tab === 'historial') {
+      if (e === 'cita_confirmada' || e === 'cita_agendada' || e === 'no_asistio') op('Completada', 'La cita ya se realizó. Sin correo.', function(){ cambiar(id, 'completada'); }, 'ok');
+      if (e === 'cita_confirmada' || e === 'cita_agendada' || e === 'completada') op('No asistió', 'Sin correo.', function(){ cambiar(id, 'no_asistio'); }, 'sec');
+      if (e === 'pago_por_validar') op('Rechazar pago', 'Se le envía el correo "pago rechazado".', function(){ rechazar(id); }, 'bad');
+      if (['pago_por_validar','pago_aprobado','dia_saturado','cita_agendada','cita_confirmada'].indexOf(e) >= 0)
+        op('Cancelar reserva', 'Se quita del calendario y libera el espacio. Sin correo.', function(){ cambiar(id, 'cancelada'); }, 'sec');
+    }
+    if (tab === 'pago_por_validar' && (e === 'pago_rechazado' || e === 'cancelada'))
+      op('Reabrir', 'Vuelve a pagos por validar. Sin correo.', function(){ cambiar(id, 'pago_por_validar'); }, 'sec');
+    return { opciones: o };
+  }
+
+  function mostrarOpciones(r, grupos){
+    var h = '<span class="chip">Mover reserva</span><h3>' + esc(r.nombre) + '</h3><div class="fila"><span>Ahora</span>' + chipEstado(r.estado) + '</div>';
+    MOVER = [];
+    grupos.forEach(function(g){
+      h += '<div class="fila"><span>A ' + NOMBRE_TAB[g.tab] + '</span></div>';
+      g.res.opciones.forEach(function(x){
+        var n = MOVER.push(x.fn) - 1;
+        h += '<div class="opcion"><button class="btn ' + x.clase + '" onclick="cerrarModal();MOVER[' + n + ']()">' + x.texto + '</button><small>' + x.nota + '</small></div>';
+      });
+    });
+    h += '<div class="acciones"><button class="btn sec" onclick="cerrarModal()">Cancelar</button></div>';
+    document.getElementById('hoja').innerHTML = h;
+    document.getElementById('modal').classList.add('abierto');
+  }
+  var MOVER = [];
+
+  /** Botón "Mover a…": todas las opciones posibles para esa reserva (útil en el celular). */
+  function pedirMover(id){
+    var r = reservaPorId(id); if (!r) return;
+    var grupos = Object.keys(NOMBRE_TAB).map(function(t){ return { tab: t, res: opcionesMover(r, t) }; })
+      .filter(function(g){ return g.res.opciones && g.res.opciones.length; });
+    if (!grupos.length) return aviso('Esta reserva no tiene otros movimientos disponibles.', true);
+    mostrarOpciones(r, grupos);
+  }
+
+  // Arrastrar una tarjeta (por la manija ⠿) y soltarla sobre una pestaña.
+  function empezarArrastre(ev, id){
+    ARRASTRANDO = id;
+    ev.dataTransfer.effectAllowed = 'move';
+    ev.dataTransfer.setData('text/plain', id);
+    var c = document.getElementById('c-' + id);
+    if (c) { ev.dataTransfer.setDragImage(c, 20, 20); setTimeout(function(){ c.classList.add('arrastrando'); }, 0); }
+    document.body.classList.add('modo-arrastre');
+  }
+  function terminarArrastre(){
+    var c = ARRASTRANDO && document.getElementById('c-' + ARRASTRANDO);
+    if (c) c.classList.remove('arrastrando');
+    document.body.classList.remove('modo-arrastre');
+    document.querySelectorAll('.tab.drop').forEach(function(t){ t.classList.remove('drop'); });
+    ARRASTRANDO = null;
+  }
+  function sobreTab(ev, el){ if (!ARRASTRANDO) return; ev.preventDefault(); el.classList.add('drop'); }
+  function soltarEnTab(ev, tab, el){
+    ev.preventDefault();
+    el.classList.remove('drop');
+    var id = ARRASTRANDO || ev.dataTransfer.getData('text/plain');
+    terminarArrastre();
+    var r = reservaPorId(id); if (!r) return;
+    if (enTab(r, tab)) return;
+    var res = opcionesMover(r, tab);
+    if (res.motivo) return aviso(res.motivo, true);
+    if (!res.opciones.length) return aviso('No se puede mover a ' + NOMBRE_TAB[tab] + ' desde "' + chipTexto(r.estado) + '".', true);
+    mostrarOpciones(r, [{ tab: tab, res: res }]);   // siempre se confirma, para evitar un mal arrastre
+  }
+  function chipTexto(e){ var d = document.createElement('div'); d.innerHTML = chipEstado(e); return d.textContent; }
+
+  /** Cambios sin correo (completada, no asistió, cancelada, reabrir…). */
+  function cambiar(id, nuevo){
+    var textos = { completada: 'Marcada como completada ✓', no_asistio: 'Marcada como "no asistió"', cancelada: 'Reserva cancelada (sin correo)',
+                   cita_confirmada: 'De vuelta en confirmadas', pago_por_validar: 'Reabierta en pagos por validar' };
+    var cambios = { estado: nuevo };
+    if (nuevo === 'cancelada' || nuevo === 'pago_por_validar') { cambios.evento_id = ''; cambios.fecha_cita = ''; cambios.hora_inicio = ''; cambios.hora_fin = ''; }
+    accion(id, 'cambiarEstado', [id, nuevo], cambios, textos[nuevo] || 'Listo', 'Guardado ✓');
   }
 
   function aprobar(id){
