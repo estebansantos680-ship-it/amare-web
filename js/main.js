@@ -127,10 +127,13 @@
         var video = entry.target;
         video._inView = entry.isIntersecting;
         if (entry.isIntersecting) {
-          var source = video.querySelector('source[data-src]');
-          if (source) {
-            source.src = source.getAttribute('data-src');
-            source.removeAttribute('data-src');
+          // Puede haber varias fuentes (WebM más liviano + MP4 de respaldo): se activan todas y el navegador elige.
+          var sources = video.querySelectorAll('source[data-src]');
+          if (sources.length) {
+            sources.forEach(function (source) {
+              source.src = source.getAttribute('data-src');
+              source.removeAttribute('data-src');
+            });
             video.addEventListener('canplay', function () { tryPlay(video); });
             video.load();
           } else {

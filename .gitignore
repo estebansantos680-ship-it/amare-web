@@ -22,3 +22,6 @@ dns-github-pages.txt
 
 # Vista previa local del correo
 emails/vista-previa.html
+
+# Fotos y videos originales del cliente (se publican solo las versiones optimizadas en assets/)
+imagenes/
