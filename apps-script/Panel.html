@@ -86,6 +86,8 @@
   .dia-cab small{ display:block; font-size:10px; color:var(--muted); margin-top:2px; }
   .dia-cab small.llena{ color:var(--bad); font-weight:600; }
   .dia-cab.cerrado-web{ box-shadow:inset 0 -3px 0 var(--bad); }
+  .dia-cab small.abierto{ color:var(--ok); font-weight:600; }
+  .opcion .btn:disabled{ opacity:.5; cursor:default; }
   .btn-dia{ margin-top:4px; background:none; border:1px solid var(--line); font:inherit; font-size:10px; font-weight:600; padding:3px 6px; cursor:pointer; color:var(--black); }
   .btn-dia:hover{ border-color:var(--black); }
   .extras{ border-left:1px solid var(--line); border-bottom:1px solid var(--line); padding:3px; min-height:20px; min-width:0; }
@@ -145,7 +147,7 @@
 <div class="aviso" id="aviso"></div>
 
 <script>
-  var DATOS = { reservas: [], ajustes: { limiteHoras: 6, tope: 4 }, bloqueados: [], horasSinDuracion: 2,
+  var DATOS = { reservas: [], ajustes: { limiteHoras: 6, tope: 4 }, bloqueados: [], abiertos: [], horasSinDuracion: 2,
                 activos: ['pago_por_validar','pago_aprobado','cita_agendada','cita_confirmada'], agenda: [], hoy: '' };
   var ARRASTRANDO = null;  // id de la reserva que se está arrastrando hacia una pestaña
   var CARGA = {};          // fecha -> ocupación, calculada aquí mismo para que sea instantánea
@@ -202,9 +204,17 @@
     });
     return Math.round(h * 10) / 10;
   }
-  /** Por qué la web no ofrece ese día: 'manual' | 'horas' | 'tope' | '' */
+  /** Modo elegido a mano para el día: 'bloquear' | 'abrir' | 'auto' */
+  function modoDia(f){
+    if (DATOS.bloqueados.indexOf(f) >= 0) return 'bloquear';
+    if ((DATOS.abiertos || []).indexOf(f) >= 0) return 'abrir';
+    return 'auto';
+  }
+  /** Por qué la web no ofrece ese día: 'manual' | 'horas' | 'tope' | '' (un día abierto a mano nunca se cierra) */
   function motivoCierre(f){
-    if (DATOS.bloqueados.indexOf(f) >= 0) return 'manual';
+    var modo = modoDia(f);
+    if (modo === 'bloquear') return 'manual';
+    if (modo === 'abrir') return '';
     if (CACHE[f] && horasDia(f) >= DATOS.ajustes.limiteHoras) return 'horas';
     if ((CARGA[f] || 0) >= DATOS.ajustes.tope) return 'tope';
     return '';
@@ -363,13 +373,14 @@
     h += '<div class="dia-cab" style="border-left:0"></div>';
     dias.forEach(function(f){
       var c = CARGA[f] || 0, hs = horasDia(f), A = DATOS.ajustes;
-      var motivo = motivoCierre(f), manual = motivo === 'manual';
+      var motivo = motivoCierre(f), modo = modoDia(f);
       var cerr = DIAS_CERRADOS.indexOf(fechaD(f).getDay()) >= 0;
       var pasado = f < DATOS.hoy;
       h += '<div class="dia-cab' + (f === DATOS.hoy ? ' hoy' : (cerr ? ' cerrado' : '')) + (motivo ? ' cerrado-web' : '') + '"><b><span class="largo">' + fechaCorta(f) + '</span><span class="corto">' + diaCorto(f) + '</span></b>' +
         '<small><span class="largo">' + hs + '/' + A.limiteHoras + ' h · ' + c + '/' + A.tope + ' reservas</span><span class="corto">' + hs + 'h · ' + c + '/' + A.tope + '</span></small>' +
-        (motivo ? '<small class="llena">' + { manual: 'Bloqueado', horas: 'Lleno por horas', tope: 'Lleno por reservas' }[motivo] + '</small>' : '') +
-        (pasado || cerr ? '' : '<button class="btn-dia" onclick="pedirBloqueo(\'' + f + '\',' + !manual + ')">' + (manual ? 'Desbloquear' : 'Bloquear día') + '</button>') +
+        (motivo ? '<small class="llena">' + { manual: 'Bloqueado a mano', horas: 'Lleno por horas', tope: 'Lleno por reservas' }[motivo] + '</small>' : '') +
+        (modo === 'abrir' ? '<small class="abierto">Abierto a mano</small>' : '') +
+        (pasado ? '' : '<button class="btn-dia" onclick="pedirModoDia(\'' + f + '\')">Disponibilidad</button>') +
         '</div>';
     });
     h += '<div class="extras" style="border-left:0"></div>';
@@ -414,24 +425,38 @@
     document.getElementById('hoja').innerHTML = h;
     document.getElementById('modal').classList.add('abierto');
   }
-  /** Bloquear / desbloquear un día para la reserva en línea (pide confirmación). */
-  function pedirBloqueo(f, bloquear){
+  /**
+   * Disponibilidad de un día en la web, a decisión del admin:
+   *  auto     → reglas normales (horas, tope de reservas y matriz).
+   *  bloquear → no aparece en la web aunque tenga espacio.
+   *  abrir    → aparece en la web aunque las reglas lo cierren (ignora horas, tope y "No permitir" de la matriz).
+   */
+  function pedirModoDia(f){
+    var actual = modoDia(f), motivo = motivoCierre(f);
+    var estado = { bloquear: 'Bloqueado a mano', abrir: 'Abierto a mano (ignora las reglas)', auto: motivo ? 'Cerrado por las reglas (' + { horas: 'horas', tope: 'reservas' }[motivo] + ')' : 'Automático (disponible según las reglas)' }[actual];
+    var op = function(modo, titulo, nota, clase){
+      return '<div class="opcion"><button class="btn ' + clase + '"' + (modo === actual ? ' disabled' : '') + ' onclick="cambiarModoDia(\'' + f + '\',\'' + modo + '\')">' + titulo + (modo === actual ? ' (actual)' : '') + '</button><small>' + nota + '</small></div>';
+    };
     document.getElementById('hoja').innerHTML =
-      '<span class="chip ' + (bloquear ? 'bad' : 'ok') + '">' + (bloquear ? 'Bloquear día' : 'Desbloquear día') + '</span><h3>' + fechaLarga(f) + '</h3>' +
-      '<div class="alerta">' + (bloquear
-        ? 'Ese día dejará de aparecer disponible en amarecr.com para sacar cita. Las citas que ya existen no cambian y tú puedes seguir agendando desde el panel.'
-        : 'Ese día vuelve a estar disponible en la web (salvo que ya esté lleno por horas, reservas o la matriz).') + '</div>' +
-      '<div class="acciones"><button class="btn ' + (bloquear ? 'bad' : 'ok') + '" onclick="bloquear(\'' + f + '\',' + bloquear + ')">' + (bloquear ? 'Sí, bloquear' : 'Sí, desbloquear') + '</button>' +
-      '<button class="btn sec" onclick="cerrarModal()">Cancelar</button></div>';
+      '<span class="chip">Disponibilidad en la web</span><h3>' + fechaLarga(f) + '</h3>' +
+      '<div class="fila"><span>Ahora</span>' + estado + '</div>' +
+      '<div class="fila"><span>Ocupación</span>' + horasDia(f) + ' de ' + DATOS.ajustes.limiteHoras + ' h · ' + (CARGA[f] || 0) + ' de ' + DATOS.ajustes.tope + ' reservas</div>' +
+      op('abrir', 'Abrir día', 'Aparece disponible en amarecr.com aunque esté lleno por horas, por reservas o por la matriz de reglas. Úsalo cuando sabes que sí hay espacio.', 'ok') +
+      op('bloquear', 'Bloquear día', 'No aparece en amarecr.com aunque tenga espacio (feriados, vacaciones, eventos).', 'bad') +
+      op('auto', 'Automático', 'Vuelve a las reglas normales: horas, tope de reservas y matriz.', 'sec') +
+      '<p class="nota">Las citas que ya existen no cambian; desde el panel siempre puedes agendar ese día.</p>' +
+      '<div class="acciones"><button class="btn sec" onclick="cerrarModal()">Cancelar</button></div>';
     document.getElementById('modal').classList.add('abierto');
   }
-  function bloquear(f, si){
+  function cambiarModoDia(f, modo){
     cerrarModal();
     DATOS.bloqueados = DATOS.bloqueados.filter(function(x){ return x !== f; });
-    if (si) DATOS.bloqueados.push(f);
+    DATOS.abiertos = (DATOS.abiertos || []).filter(function(x){ return x !== f; });
+    if (modo === 'bloquear') DATOS.bloqueados.push(f);
+    if (modo === 'abrir') DATOS.abiertos.push(f);
     pintar();
-    aviso(si ? 'Día bloqueado para la web.' : 'Día desbloqueado.');
-    COLA.push({ fn: 'bloquearDia', args: [f, si], textoListo: 'Guardado ✓' });
+    aviso({ bloquear: 'Día bloqueado para la web.', abrir: 'Día abierto en la web (ignora las reglas).', auto: 'Día en modo automático.' }[modo]);
+    COLA.push({ fn: 'bloquearDia', args: [f, modo], textoListo: 'Guardado ✓' });
     procesarCola();
   }
 
@@ -463,7 +488,8 @@
   // ---------------------------------------------------------------- tarjetas
   function textoCarga(fecha){
     var c = CARGA[fecha] || 0, hs = horasDia(fecha), A = DATOS.ajustes, motivo = motivoCierre(fecha);
-    var txt = { manual: ' · día bloqueado para la web', horas: ' · lleno por horas para la web', tope: ' · lleno por reservas para la web' }[motivo] || '';
+    var txt = { manual: ' · día bloqueado para la web', horas: ' · lleno por horas para la web', tope: ' · lleno por reservas para la web' }[motivo] ||
+      (modoDia(fecha) === 'abrir' ? ' · abierto a mano en la web' : '');
     return '<div class="carga' + (motivo ? ' llena' : '') + '">Ese día: ' + hs + ' de ' + A.limiteHoras + ' h ocupadas · ' + c + ' de ' + A.tope + ' reservas' + txt + '. Tú decides si agendar igual.</div>';
   }
   function chipEstado(e){
@@ -592,7 +618,7 @@
       .withSuccessHandler(function(res){
         var r = reservaPorId(t.id);
         if (r && res && res.reserva) Object.keys(res.reserva).forEach(function(k){ r[k] = res.reserva[k]; });
-        if (res && res.bloqueados) DATOS.bloqueados = res.bloqueados;        // bloquearDia
+        if (res && res.bloqueados) { DATOS.bloqueados = res.bloqueados; DATOS.abiertos = res.abiertos || []; } // bloquearDia
         if (res && res.limiteHoras) DATOS.ajustes = res;                     // guardarAjustes
         OCUPADO = false;
         if (res && res.correo === false) aviso('Guardado, pero el correo a la clienta NO salió. Revisa EmailJS.', true);

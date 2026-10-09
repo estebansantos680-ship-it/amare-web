@@ -281,7 +281,7 @@
   var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   // Hasta dónde se puede reservar en línea (último día incluido).
   var FECHA_MAX = new Date(2030, 11, 31, 23, 59);
-  var dispo = { dias: {}, reglas: [], tope: 4, cerrados: {} };
+  var dispo = { dias: {}, reglas: [], tope: 4, cerrados: {}, abiertos: [] };
   var mesVisible = null;
 
   function toLocalISODate(d) {
@@ -295,7 +295,7 @@
     if (!API_URL) return Promise.resolve();
     return fetch(API_URL + '?accion=disponibilidad&t=' + Date.now())
       .then(function (r) { return r.json(); })
-      .then(function (j) { if (j && j.ok && j.dias) dispo = { dias: j.dias, reglas: j.reglas || [], tope: j.tope || 4, cerrados: j.cerrados || {} }; })
+      .then(function (j) { if (j && j.ok && j.dias) dispo = { dias: j.dias, reglas: j.reglas || [], tope: j.tope || 4, cerrados: j.cerrados || {}, abiertos: j.abiertos || [] }; })
       .catch(function () { /* sin conexión al servidor: solo se bloquean días cerrados */ });
   }
 
@@ -307,7 +307,8 @@
   function evaluarDia(iso, franja) {
     var dia = dispo.dias[iso] || { total: 0, cats: {} };
     if (dispo.cerrados[iso]) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' }; // horas del calendario o bloqueo del admin
-    if (dia.total >= dispo.tope) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' };
+    var abierto = dispo.abiertos.indexOf(iso) >= 0; // "Abrir día" del panel: ignora tope y "No permitir"
+    if (!abierto && dia.total >= dispo.tope) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' };
     var cat = norm(state.service && state.service.categoria), fr = norm(franja);
     var res = { accion: 'permitir', mensaje: '' };
     dispo.reglas.forEach(function (g) {
@@ -316,7 +317,7 @@
       var faltan = {};
       g.existentes.forEach(function (e) { faltan[e] = (faltan[e] || 0) + 1; });
       for (var e in faltan) if ((dia.cats[e] || 0) < faltan[e]) return;
-      if (g.accion === 'no permitir') res = { accion: 'bloquear', mensaje: g.mensaje || 'Ese día ya no tenemos espacio para este servicio.' };
+      if (g.accion === 'no permitir' && !abierto) res = { accion: 'bloquear', mensaje: g.mensaje || 'Ese día ya no tenemos espacio para este servicio.' };
       else if (res.accion !== 'bloquear') res = { accion: 'aprobacion', mensaje: g.mensaje || MENSAJE_APROBACION };
     });
     return res;
