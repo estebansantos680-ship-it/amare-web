@@ -34,12 +34,13 @@ FOTOS = {
     'liso-negro': 'IMG_7152.jpg',
     'platino': 'IMG_7760.jpg',
     'bob-magenta': 'IMG_7923.jpg',
-    'balayage-sonrisa': 'IMG_9235.jpg',
+    'inicio-rubia': 'Inicio1.jpg',
+    'inicio-liso-negro': 'Inicio2.jpg',
 }
 
 # (foto, ancho, alto) — vertical: recorte; ancho: composición
 VERTICALES = [
-    ('balayage-sonrisa', 900, 1125), ('balayage-ondas', 900, 1125), ('liso-negro', 900, 1125),
+    ('inicio-rubia', 900, 1125), ('inicio-liso-negro', 900, 1125), ('balayage-ondas', 900, 1125), ('liso-negro', 900, 1125),
     ('rizos-caramelo', 600, 800), ('liso-castano', 600, 800), ('rubio-liso', 600, 800), ('bob-oscuro', 600, 800),
     ('estudio-liso', 800, 1000), ('clienta-ondas', 420, 560),
     ('cobrizo-ondas', 700, 875), ('bob-magenta', 700, 875), ('capas-flequillo', 700, 875), ('liso-negro', 700, 875),
@@ -48,7 +49,7 @@ VERTICALES = [
 ]
 ANCHAS = [
     ('balayage-ondas', 1800, 900), ('cobrizo-ondas', 1800, 900), ('bob-oscuro', 1800, 900),
-    ('liso-castano', 1800, 900), ('estudio-espalda', 1800, 900), ('balayage-sonrisa', 1800, 900),
+    ('liso-castano', 1800, 900), ('estudio-espalda', 1800, 900), ('inicio-rubia', 1800, 900),
     ('cobriza', 1600, 800), ('estudio-liso', 1600, 800), ('clienta-ondas', 1600, 800),
 ]
 
