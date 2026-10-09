@@ -274,13 +274,14 @@
   // Calendario propio: el selector nativo no permite bloquear días específicos.
   // Se bloquean días pasados, domingos y lunes, y los días llenos según el servidor
   // (API_URL ?accion=disponibilidad): cada reserva ocupa espacio desde que entra,
-  // hay un tope de reservas por día y la matriz de reglas (pestaña "Reglas" de la hoja)
+  // hay un tope de reservas por día, un límite de horas ocupadas en Google Calendar,
+  // días bloqueados a mano desde el panel y la matriz de reglas (pestaña "Reglas" de la hoja)
   // decide por categoría (No permitir / Requiere aprobación). Se consulta de nuevo al
   // entrar al paso 3, así un rechazo o cancelación libera el día con solo refrescar.
   var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   // Hasta dónde se puede reservar en línea (último día incluido).
   var FECHA_MAX = new Date(2030, 11, 31, 23, 59);
-  var dispo = { dias: {}, reglas: [], tope: 6 };
+  var dispo = { dias: {}, reglas: [], tope: 4, cerrados: {} };
   var mesVisible = null;
 
   function toLocalISODate(d) {
@@ -294,7 +295,7 @@
     if (!API_URL) return Promise.resolve();
     return fetch(API_URL + '?accion=disponibilidad&t=' + Date.now())
       .then(function (r) { return r.json(); })
-      .then(function (j) { if (j && j.ok && j.dias) dispo = { dias: j.dias, reglas: j.reglas || [], tope: j.tope || 6 }; })
+      .then(function (j) { if (j && j.ok && j.dias) dispo = { dias: j.dias, reglas: j.reglas || [], tope: j.tope || 4, cerrados: j.cerrados || {} }; })
       .catch(function () { /* sin conexión al servidor: solo se bloquean días cerrados */ });
   }
 
@@ -305,6 +306,7 @@
   // Misma lógica que el servidor (Codigo.gs → evaluarDia_): { accion: 'permitir' | 'aprobacion' | 'bloquear', mensaje }
   function evaluarDia(iso, franja) {
     var dia = dispo.dias[iso] || { total: 0, cats: {} };
+    if (dispo.cerrados[iso]) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' }; // horas del calendario o bloqueo del admin
     if (dia.total >= dispo.tope) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' };
     var cat = norm(state.service && state.service.categoria), fr = norm(franja);
     var res = { accion: 'permitir', mensaje: '' };

@@ -26,7 +26,11 @@ var CONFIG = {
   // Publicación "Panel admin" (acceso: solo facturas@). La otra publicación es la API pública.
   PANEL_URL: 'https://script.google.com/a/macros/amarecr.com/s/AKfycbyNGq-K0H7scCaGoJwNtsLFgL7YcKL2q4UHhXm9V01VIWo0rPPoyQJQKNrd1sJ2vLVM/exec',
   ZONA: 'America/Costa_Rica',
-  TOPE_DIA: 6,                 // tope de seguridad: máximo de reservas por día, sin importar la franja
+  // Valores por defecto de los ajustes que el admin cambia desde el panel (Agenda → Ajustes):
+  TOPE_DIA: 4,                 // máximo de reservas por día, sin importar la franja
+  LIMITE_HORAS_DIA: 6,         // horas ocupadas en Google Calendar (sumadas) que cierran el día en la web
+  HORAS_SIN_DURACION: 2,       // horas que se asumen para una reserva web sin duración conocida
+  FECHA_MAX: '2030-12-31',     // último día reservable en línea (igual que js/booking.js)
   DIAS_CERRADOS: [0, 1],       // domingo y lunes
   HORA_MANANA: [9, 13],        // la mañana va de 9:00 a 13:00
   HORA_TARDE: [13, 18],        // la tarde de 13:00 a 18:00
@@ -265,11 +269,13 @@ function norm_(t) {
 function doGet(e) {
   var accion = (e && e.parameter && e.parameter.accion) || '';
   if (accion === 'disponibilidad') {
-    var dias = resumenDias_(leerReservas_());
+    var reservas = leerReservas_(), aj = ajustes_();
+    var dias = resumenDias_(reservas);
+    var cerrados = diasCerrados_(reservas, aj);
     return json_({
-      ok: true, dias: dias, tope: CONFIG.TOPE_DIA,
+      ok: true, dias: dias, tope: aj.tope, cerrados: cerrados,
       reglas: obtenerReglas_(),
-      bloqueos: bloqueosCompat_(dias) // para páginas con la versión anterior en caché
+      bloqueos: bloqueosCompat_(dias, cerrados, aj) // para páginas con la versión anterior en caché
     });
   }
   if (!esAdmin_()) {
@@ -306,7 +312,10 @@ function doPost(e) {
     var lock = LockService.getScriptLock();
     lock.waitLock(30000);
     try {
-      var decision = evaluarDia_(resumenDias_(leerReservas_())[r.fecha_solicitada], r.categoria, r.franja, obtenerReglas_());
+      var todas = leerReservas_(), aj = ajustes_();
+      var cerrado = diasCerrados_(todas, aj, r.fecha_solicitada)[r.fecha_solicitada];
+      var decision = cerrado ? { accion: 'bloquear', mensaje: 'Ese día ya está completo.' }
+        : evaluarDia_(resumenDias_(todas)[r.fecha_solicitada], r.categoria, r.franja, obtenerReglas_(), aj.tope);
       if (decision.accion === 'bloquear') {
         if (archivo) archivo.setTrashed(true);
         return json_({ ok: false, error: 'franja_llena', mensaje: decision.mensaje });
@@ -434,7 +443,8 @@ function actualizarReserva_(r, cambios, nota) {
 
 // ------------------------------------------------------------------ Cupos y disponibilidad
 // Regla: cada reserva ocupa espacio desde que entra (aunque el pago no esté validado).
-// El día se llena por la matriz de la pestaña "Reglas" (por categoría) o al llegar a TOPE_DIA reservas.
+// El día se cierra con lo que ocurra primero: tope de reservas, horas ocupadas en Google Calendar,
+// bloqueo manual desde el panel, o la matriz de la pestaña "Reglas" (por categoría).
 function tieneHorario_(r) {
   return (r.estado === ESTADOS.CITA_CONFIRMADA || r.estado === ESTADOS.CITA_AGENDADA) && r.fecha_cita && r.hora_inicio && r.hora_fin;
 }
@@ -462,9 +472,9 @@ function resumenDias_(reservas, excluirId) {
  * ¿Se puede pedir esta categoría ese día y franja? → { accion: 'permitir' | 'aprobacion' | 'bloquear', mensaje }
  * Misma lógica que js/booking.js (evaluarDia), para que la página y el servidor decidan igual.
  */
-function evaluarDia_(dia, categoria, franja, reglas) {
+function evaluarDia_(dia, categoria, franja, reglas, tope) {
   dia = dia || { total: 0, cats: {} };
-  if (dia.total >= CONFIG.TOPE_DIA) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' };
+  if (dia.total >= (tope || ajustes_().tope)) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' };
   var cat = norm_(categoria), fr = norm_(franja), resultado = { accion: 'permitir', mensaje: '' };
   reglas.forEach(function (g) {
     if (g.solicitado !== cat) return;
@@ -480,11 +490,88 @@ function evaluarDia_(dia, categoria, franja, reglas) {
 
 var MENSAJE_APROBACION = 'Este servicio requiere validación del equipo AMARË antes de confirmar la reserva.';
 
-/** Días completos (tope diario) en el formato viejo { fecha: { manana, tarde } }. */
-function bloqueosCompat_(dias) {
+/** Días cerrados en el formato viejo { fecha: { manana, tarde } } (páginas con booking.js anterior en caché). */
+function bloqueosCompat_(dias, cerrados, aj) {
   var b = {};
-  Object.keys(dias).forEach(function (f) { if (dias[f].total >= CONFIG.TOPE_DIA) b[f] = { manana: true, tarde: true }; });
+  Object.keys(dias).forEach(function (f) { if (dias[f].total >= aj.tope) b[f] = { manana: true, tarde: true }; });
+  Object.keys(cerrados).forEach(function (f) { b[f] = { manana: true, tarde: true }; });
   return b;
+}
+
+// ------------------------------------------------------------------ Ajustes y bloqueos de día (los cambia el admin)
+function ajustes_() {
+  var p = PropertiesService.getScriptProperties();
+  var horas = Number(p.getProperty('LIMITE_HORAS_DIA')), tope = Number(p.getProperty('TOPE_DIA'));
+  return { limiteHoras: horas > 0 ? horas : CONFIG.LIMITE_HORAS_DIA, tope: tope > 0 ? tope : CONFIG.TOPE_DIA };
+}
+
+function diasBloqueados_() {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty('DIAS_BLOQUEADOS') || '[]'); } catch (e) { return []; }
+}
+
+/**
+ * Horas ocupadas por día en Google Calendar (todos los eventos con hora, también los creados a mano;
+ * los de todo el día no cuentan). Citas en paralelo se suman. Se guarda 2 min en caché porque leer
+ * el calendario hasta FECHA_MAX tarda; las acciones del panel limpian la caché.
+ */
+function horasCalendario_() {
+  var cache = CacheService.getScriptCache(), guardado = cache.get('HORAS_CAL');
+  if (guardado) return JSON.parse(guardado);
+  var hoy = Utilities.formatDate(new Date(), CONFIG.ZONA, 'yyyy-MM-dd');
+  var horas = {};
+  CalendarApp.getDefaultCalendar().getEvents(fechaHora_(hoy, '00:00'), fechaHora_(CONFIG.FECHA_MAX, '23:59')).forEach(function (ev) {
+    if (ev.isAllDayEvent()) return;
+    var ini = ev.getStartTime(), fin = ev.getEndTime();
+    var f = Utilities.formatDate(ini, CONFIG.ZONA, 'yyyy-MM-dd');
+    var finDia = fechaHora_(f, '23:59');
+    var h = (Math.min(fin.getTime(), finDia.getTime()) - ini.getTime()) / 36e5;
+    if (h > 0) horas[f] = Math.round(((horas[f] || 0) + h) * 100) / 100;
+  });
+  try { cache.put('HORAS_CAL', JSON.stringify(horas), 120); } catch (e) { /* muy grande para la caché */ }
+  return horas;
+}
+
+function limpiarCacheCalendario_() { CacheService.getScriptCache().remove('HORAS_CAL'); }
+
+/** Horas del día = eventos del calendario + duración estimada de reservas web que aún no tienen hora. */
+function horasPorDia_(reservas) {
+  var horas = JSON.parse(JSON.stringify(horasCalendario_()));
+  reservas.forEach(function (r) {
+    if (!esActiva_(r) || tieneHorario_(r) || !r.fecha_solicitada) return;
+    var h = Number(r.dur_max_h) || Number(r.dur_min_h) || CONFIG.HORAS_SIN_DURACION;
+    horas[r.fecha_solicitada] = Math.round(((horas[r.fecha_solicitada] || 0) + h) * 100) / 100;
+  });
+  return horas;
+}
+
+/** { fecha: 'manual' | 'horas' } — días que la web no ofrece (además del tope y la matriz). */
+function diasCerrados_(reservas, aj) {
+  var cerrados = {}, horas = horasPorDia_(reservas);
+  Object.keys(horas).forEach(function (f) { if (horas[f] >= aj.limiteHoras) cerrados[f] = 'horas'; });
+  diasBloqueados_().forEach(function (f) { cerrados[f] = 'manual'; });
+  return cerrados;
+}
+
+/** Botón "Bloquear día" / "Desbloquear día" del panel. */
+function bloquearDia(fecha, bloquear) {
+  exigirAdmin_();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error('Fecha inválida.');
+  var hoy = Utilities.formatDate(new Date(), CONFIG.ZONA, 'yyyy-MM-dd');
+  var lista = diasBloqueados_().filter(function (f) { return f !== fecha && f >= hoy; }); // limpia días pasados
+  if (bloquear) lista.push(fecha);
+  lista.sort();
+  PropertiesService.getScriptProperties().setProperty('DIAS_BLOQUEADOS', JSON.stringify(lista));
+  return { bloqueados: lista };
+}
+
+/** Ajustes editables desde el panel. */
+function guardarAjustes(limiteHoras, tope) {
+  exigirAdmin_();
+  limiteHoras = Number(limiteHoras); tope = Number(tope);
+  if (!(limiteHoras > 0 && limiteHoras <= 24)) throw new Error('Las horas por día deben estar entre 1 y 24.');
+  if (!(tope >= 1 && tope <= 50)) throw new Error('El tope de reservas debe estar entre 1 y 50.');
+  PropertiesService.getScriptProperties().setProperties({ LIMITE_HORAS_DIA: String(limiteHoras), TOPE_DIA: String(Math.round(tope)) });
+  return ajustes_();
 }
 
 // ------------------------------------------------------------------ Panel de administración
@@ -506,7 +593,8 @@ function panelDatos() {
   var desde = Utilities.formatDate(new Date(hoy.getTime() - 14 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
   var hasta = Utilities.formatDate(new Date(hoy.getTime() + 120 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
   return {
-    reservas: reservas, tope: CONFIG.TOPE_DIA, activos: ESTADOS_ACTIVOS,
+    reservas: reservas, activos: ESTADOS_ACTIVOS, ajustes: ajustes_(), bloqueados: diasBloqueados_(),
+    horasSinDuracion: CONFIG.HORAS_SIN_DURACION,
     hoy: Utilities.formatDate(hoy, CONFIG.ZONA, 'yyyy-MM-dd'),
     agenda: agenda_(desde, hasta, todas), agendaDesde: desde, agendaHasta: hasta
   };
@@ -558,6 +646,7 @@ function rechazarPago(id, motivo) {
 
 function marcarDiaSaturado(id, nota) {
   exigirAdmin_();
+  limpiarCacheCalendario_();
   var r = buscarReserva_(id);
   borrarEvento_(r);
   actualizarReserva_(r, { estado: ESTADOS.DIA_SATURADO, motivo: nota || '', evento_id: '', fecha_cita: '', hora_inicio: '', hora_fin: '' },
@@ -572,6 +661,7 @@ function marcarDiaSaturado(id, nota) {
  */
 function agendarCita(id, fecha, horaInicio, horaFin) {
   exigirAdmin_();
+  limpiarCacheCalendario_();
   var r = buscarReserva_(id);
   var inicio = fechaHora_(fecha, horaInicio);
   var fin = fechaHora_(fecha, horaFin);
@@ -620,6 +710,7 @@ function confirmarCita(id) {
  */
 function eliminarReserva(id) {
   exigirAdmin_();
+  limpiarCacheCalendario_();
   var r = buscarReserva_(id);
   borrarEvento_(r);
   actualizarReserva_(r, { estado: ESTADOS.ELIMINADA, evento_id: '' }, 'eliminada desde el panel (estado anterior: ' + r.estado + ')');
@@ -641,6 +732,7 @@ var CAMBIOS_SIN_CORREO = {
 
 function cambiarEstado(id, nuevo) {
   exigirAdmin_();
+  limpiarCacheCalendario_();
   var r = buscarReserva_(id);
   var desde = CAMBIOS_SIN_CORREO[nuevo];
   if (!desde || desde.indexOf(r.estado) < 0) throw new Error('No se puede pasar de "' + r.estado + '" a "' + nuevo + '".');
