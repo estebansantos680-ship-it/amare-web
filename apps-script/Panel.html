@@ -198,49 +198,61 @@
   function editando(){ var a = document.activeElement; return a && /INPUT|TEXTAREA|SELECT/.test(a.tagName); }
 
   // ---------------------------------------------------------------- cupo (mismo criterio que el servidor)
-  // Cada reserva activa ocupa un espacio desde que entra; tope de seguridad por día (la matriz decide por categoría).
+  // Cada franja (mañana 00:00–11:59, tarde 12:00–23:59) se llena sola por citas u horas dentro de ella.
+  // Una cita que cruza las 12:00 cuenta como cita en ambas y sus horas se reparten. Igual que el servidor.
   function tieneHorario(r){ return (r.estado === 'cita_confirmada' || r.estado === 'cita_agendada') && r.fecha_cita && r.hora_inicio && r.hora_fin; }
-  /** Horas ocupadas del día: eventos con hora del calendario (en paralelo se suman) + reservas web sin hora. */
-  function horasDia(f){
-    var h = 0;
-    (CACHE[f] || []).forEach(function(e){ if (!e.todoElDia) h += Math.max(horas(e.fin) - horas(e.ini), 0); });
+  /** { manana: { citas, horas }, tarde: { citas, horas } } con eventos del calendario + reservas web sin hora. */
+  function ocupacionDia(f){
+    var corte = DATOS.corte || 12, o = { manana: { citas: 0, horas: 0 }, tarde: { citas: 0, horas: 0 } };
+    var sumar = function(ini, fin){
+      var partes = { manana: Math.min(fin, corte) - Math.max(ini, 0), tarde: Math.min(fin, 24) - Math.max(ini, corte) };
+      ['manana', 'tarde'].forEach(function(fr){ if (partes[fr] > 0) { o[fr].citas++; o[fr].horas += partes[fr]; } });
+    };
+    (CACHE[f] || []).forEach(function(e){ if (!e.todoElDia) sumar(horas(e.ini), e.fin === '23:59' ? 24 : horas(e.fin)); });
+    var inicios = DATOS.inicios || { manana: 9, tarde: 13 };
     DATOS.reservas.forEach(function(r){
       if (DATOS.activos.indexOf(r.estado) < 0 || tieneHorario(r) || r.fecha_solicitada !== f) return;
-      h += Number(r.dur_max_h) || Number(r.dur_min_h) || DATOS.horasSinDuracion;
+      var ini = r.franja === 'Tarde' ? inicios.tarde : inicios.manana;
+      sumar(ini, Math.min(ini + (Number(r.dur_max_h) || Number(r.dur_min_h) || DATOS.horasSinDuracion), 24));
     });
-    return Math.round(h * 10) / 10;
+    o.manana.horas = Math.round(o.manana.horas * 10) / 10;
+    o.tarde.horas = Math.round(o.tarde.horas * 10) / 10;
+    return o;
   }
   // ---------------------------------------------------------------- disponibilidad en la web (día, mañana, tarde)
   var FRANJAS = [['manana', 'Mañana'], ['tarde', 'Tarde']];
   /** Modo manual de una franja: 'bloquear' | 'abrir' | 'auto' */
   function modoFranja(f, fr){ return ((DATOS.modos || {})[f] || {})[fr] || 'auto'; }
-  /** Cierre automático del día por las reglas: 'horas' | 'tope' | '' */
-  function cierreAuto(f){
-    if (CACHE[f] && horasDia(f) >= DATOS.ajustes.limiteHoras) return 'horas';
-    if ((CARGA[f] || 0) >= DATOS.ajustes.tope) return 'tope';
+  /** Cierre automático de una franja por las reglas: 'citas' | 'horas' | '' */
+  function cierreAuto(f, fr){
+    var o = ocupacionDia(f)[fr];
+    if (o.citas >= DATOS.ajustes.tope) return 'citas';
+    if (o.horas >= DATOS.ajustes.limiteHoras) return 'horas';
     return '';
   }
-  /** Estado de una franja en la web: 'bloqueada' | 'abierta' | 'horas' | 'tope' | 'libre' */
+  /** Estado de una franja en la web: 'bloqueada' | 'abierta' | 'citas' | 'horas' | 'libre' */
   function estadoFranja(f, fr){
     var m = modoFranja(f, fr);
     if (m === 'bloquear') return 'bloqueada';
     if (m === 'abrir') return 'abierta';
-    return cierreAuto(f) || 'libre';
+    return cierreAuto(f, fr) || 'libre';
   }
-  function franjaCerrada(e){ return e === 'bloqueada' || e === 'horas' || e === 'tope'; }
+  function franjaCerrada(e){ return e === 'bloqueada' || e === 'horas' || e === 'citas'; }
+  /** "3/6 h · 2/4 citas" de una franja */
+  function textoOcupacion(o){ return o.horas + '/' + DATOS.ajustes.limiteHoras + ' h · ' + o.citas + '/' + DATOS.ajustes.tope + ' citas'; }
   /** El día no se ofrece en la web solo si mañana y tarde están cerradas. */
   function motivoCierre(f){
     var m = estadoFranja(f, 'manana'), t = estadoFranja(f, 'tarde');
     if (!franjaCerrada(m) || !franjaCerrada(t)) return '';
     return m === t ? (m === 'bloqueada' ? 'manual' : m) : 'mixto';
   }
-  var TEXTO_ESTADO = { bloqueada: 'bloqueada a mano', abierta: 'abierta a mano', horas: 'llena por horas', tope: 'llena por reservas', libre: 'disponible' };
+  var TEXTO_ESTADO = { bloqueada: 'bloqueada a mano', abierta: 'abierta a mano', horas: 'llena por horas', citas: 'llena por citas', libre: 'disponible' };
   /** Resumen corto para el encabezado del día en la Agenda. */
   function resumenDisponibilidad(f){
     var m = estadoFranja(f, 'manana'), t = estadoFranja(f, 'tarde');
     if (m === t) {
       if (m === 'libre') return '';
-      var txt = { bloqueada: 'Bloqueado a mano', abierta: 'Abierto a mano', horas: 'Lleno por horas', tope: 'Lleno por reservas' }[m];
+      var txt = { bloqueada: 'Bloqueado a mano', abierta: 'Abierto a mano', horas: 'Lleno por horas', citas: 'Lleno por citas' }[m];
       return '<small class="' + (m === 'abierta' ? 'abierto' : 'llena') + '">' + txt + '</small>';
     }
     return FRANJAS.map(function(x){
@@ -401,12 +413,13 @@
 
     h += '<div class="dia-cab" style="border-left:0"></div>';
     dias.forEach(function(f){
-      var c = CARGA[f] || 0, hs = horasDia(f), A = DATOS.ajustes;
+      var oc = ocupacionDia(f);
       var motivo = motivoCierre(f);
       var cerr = DIAS_CERRADOS.indexOf(fechaD(f).getDay()) >= 0;
       var pasado = f < DATOS.hoy;
       h += '<div class="dia-cab' + (f === DATOS.hoy ? ' hoy' : (cerr ? ' cerrado' : '')) + (motivo ? ' cerrado-web' : '') + '"><b><span class="largo">' + fechaCorta(f) + '</span><span class="corto">' + diaCorto(f) + '</span></b>' +
-        '<small><span class="largo">' + hs + '/' + A.limiteHoras + ' h · ' + c + '/' + A.tope + ' reservas</span><span class="corto">' + hs + 'h · ' + c + '/' + A.tope + '</span></small>' +
+        '<small><span class="largo">M ' + oc.manana.horas + 'h·' + oc.manana.citas + ' · T ' + oc.tarde.horas + 'h·' + oc.tarde.citas + '</span>' +
+          '<span class="corto">M' + oc.manana.citas + ' T' + oc.tarde.citas + '</span></small>' +
         resumenDisponibilidad(f) +
         (pasado ? '' : '<button class="btn-dia" onclick="pedirModoDia(\'' + f + '\')">Disponibilidad</button>') +
         '</div>';
@@ -473,7 +486,7 @@
     document.getElementById('hoja').innerHTML =
       '<span class="chip">Disponibilidad en la web</span><h3>' + fechaLarga(f) + '</h3>' +
       '<div class="fila"><span>Ahora</span>Mañana: ' + TEXTO_ESTADO[estadoFranja(f, 'manana')] + ' · Tarde: ' + TEXTO_ESTADO[estadoFranja(f, 'tarde')] + '</div>' +
-      '<div class="fila"><span>Ocupación</span>' + horasDia(f) + ' de ' + DATOS.ajustes.limiteHoras + ' h · ' + (CARGA[f] || 0) + ' de ' + DATOS.ajustes.tope + ' reservas</div>' +
+      '<div class="fila"><span>Ocupación</span>Mañana ' + textoOcupacion(ocupacionDia(f).manana) + '<br>Tarde ' + textoOcupacion(ocupacionDia(f).tarde) + '</div>' +
       fila('dia', 'Día completo', mm === mt ? mm : '') +
       fila('manana', 'Mañana', mm) +
       fila('tarde', 'Tarde', mt) +
@@ -499,18 +512,20 @@
   function pedirAjustes(){
     var A = DATOS.ajustes;
     document.getElementById('hoja').innerHTML =
-      '<span class="chip">Ajustes</span><h3>Cuándo se cierra un día en la web</h3>' +
+      '<span class="chip">Ajustes</span><h3>Cuándo se cierra una franja en la web</h3>' +
       '<div class="campos" style="margin-top:12px">' +
-        '<div><label>Horas ocupadas por día</label><input type="number" id="aj-horas" min="1" max="24" step="0.5" value="' + A.limiteHoras + '"></div>' +
-        '<div><label>Reservas por día</label><input type="number" id="aj-tope" min="1" max="50" step="1" value="' + A.tope + '"></div>' +
+        '<div><label>Horas por franja</label><input type="number" id="aj-horas" min="1" max="12" step="0.5" value="' + A.limiteHoras + '"></div>' +
+        '<div><label>Citas por franja</label><input type="number" id="aj-tope" min="1" max="50" step="1" value="' + A.tope + '"></div>' +
       '</div>' +
-      '<p class="nota">El día se cierra con lo que pase primero: estas horas (sumando todas las citas del Google Calendar, también las que metes a mano, más las reservas web sin hora), este número de reservas, la matriz de reglas o el botón "Bloquear día".</p>' +
+      '<p class="nota">La <b>mañana</b> (00:00–11:59) y la <b>tarde</b> (12:00–23:59) se llenan por separado, con lo que pase primero: estas horas o este número de citas dentro de cada una. ' +
+      'Cuentan todas las citas del Google Calendar (también las que metes a mano) y las reservas web sin hora. Una cita que cruza las 12:00 cuenta en ambas y sus horas se reparten. ' +
+      'Si se llena una franja, la otra sigue abierta; el día completo se cierra cuando se llenan las dos. También aplican la matriz de reglas y el botón "Disponibilidad".</p>' +
       '<div class="acciones"><button class="btn" onclick="guardarAjustes()">Guardar</button><button class="btn sec" onclick="cerrarModal()">Cancelar</button></div>';
     document.getElementById('modal').classList.add('abierto');
   }
   function guardarAjustes(){
     var hs = Number(document.getElementById('aj-horas').value), tope = Number(document.getElementById('aj-tope').value);
-    if (!(hs > 0 && hs <= 24) || !(tope >= 1 && tope <= 50)) return aviso('Revisa los valores: horas de 1 a 24 y reservas de 1 a 50.', true);
+    if (!(hs > 0 && hs <= 12) || !(tope >= 1 && tope <= 50)) return aviso('Revisa los valores: horas de 1 a 12 y citas de 1 a 50.', true);
     cerrarModal();
     DATOS.ajustes = { limiteHoras: hs, tope: Math.round(tope) };
     pintar();
@@ -523,10 +538,10 @@
 
   // ---------------------------------------------------------------- tarjetas
   function textoCarga(fecha){
-    var c = CARGA[fecha] || 0, hs = horasDia(fecha), A = DATOS.ajustes, motivo = motivoCierre(fecha);
+    var oc = ocupacionDia(fecha), motivo = motivoCierre(fecha);
     var m = estadoFranja(fecha, 'manana'), t = estadoFranja(fecha, 'tarde');
-    var txt = (m === 'libre' && t === 'libre') ? '' : ' · en la web: mañana ' + TEXTO_ESTADO[m] + ', tarde ' + TEXTO_ESTADO[t];
-    return '<div class="carga' + (motivo ? ' llena' : '') + '">Ese día: ' + hs + ' de ' + A.limiteHoras + ' h ocupadas · ' + c + ' de ' + A.tope + ' reservas' + txt + '. Tú decides si agendar igual.</div>';
+    return '<div class="carga' + (franjaCerrada(m) || franjaCerrada(t) ? ' llena' : '') + '">Ese día · <b>mañana</b> ' + textoOcupacion(oc.manana) + ' (' + TEXTO_ESTADO[m] + ')' +
+      ' · <b>tarde</b> ' + textoOcupacion(oc.tarde) + ' (' + TEXTO_ESTADO[t] + '). Tú decides si agendar igual.</div>';
   }
   function chipEstado(e){
     var m = { pago_por_validar:['Pago por validar','warn'], pago_aprobado:['Pago aprobado · por agendar','ok'], dia_saturado:['Día saturado · contactar','warn'],

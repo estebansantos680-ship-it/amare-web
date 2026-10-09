@@ -274,7 +274,7 @@
   // Calendario propio: el selector nativo no permite bloquear días específicos.
   // Se bloquean días pasados, domingos y lunes, y los días llenos según el servidor
   // (API_URL ?accion=disponibilidad): cada reserva ocupa espacio desde que entra,
-  // hay un tope de reservas por día, un límite de horas ocupadas en Google Calendar,
+  // cada franja (mañana 00:00–11:59, tarde 12:00–23:59) se cierra con su tope de citas u horas ocupadas,
   // días bloqueados a mano desde el panel y la matriz de reglas (pestaña "Reglas" de la hoja)
   // decide por categoría (No permitir / Requiere aprobación). Se consulta de nuevo al
   // entrar al paso 3, así un rechazo o cancelación libera el día con solo refrescar.
@@ -307,11 +307,12 @@
   function evaluarDia(iso, franja) {
     var dia = dispo.dias[iso] || { total: 0, cats: {} };
     // Disponibilidad manual del panel para esa franja: bloquear la cierra; abrir ignora horas, tope y "No permitir".
-    var modo = (dispo.modos[iso] || {})[norm(franja) === 'tarde' ? 'tarde' : 'manana'];
+    var clave = norm(franja) === 'tarde' ? 'tarde' : 'manana';
+    var modo = (dispo.modos[iso] || {})[clave];
     if (modo === 'bloquear') return { accion: 'bloquear', mensaje: 'Ese horario no está disponible ese día.' };
     var abierto = modo === 'abrir';
-    if (!abierto && dispo.cerrados[iso]) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' }; // horas del calendario
-    if (!abierto && dia.total >= dispo.tope) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' };
+    // Cada franja se llena sola (citas u horas dentro de ella, según Google Calendar y reservas web).
+    if (!abierto && (dispo.cerrados[iso] || {})[clave]) return { accion: 'bloquear', mensaje: 'Ese horario ya está completo.' };
     var cat = norm(state.service && state.service.categoria), fr = norm(franja);
     var res = { accion: 'permitir', mensaje: '' };
     dispo.reglas.forEach(function (g) {

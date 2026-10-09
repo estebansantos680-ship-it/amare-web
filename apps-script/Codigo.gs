@@ -27,8 +27,9 @@ var CONFIG = {
   PANEL_URL: 'https://script.google.com/a/macros/amarecr.com/s/AKfycbyNGq-K0H7scCaGoJwNtsLFgL7YcKL2q4UHhXm9V01VIWo0rPPoyQJQKNrd1sJ2vLVM/exec',
   ZONA: 'America/Costa_Rica',
   // Valores por defecto de los ajustes que el admin cambia desde el panel (Agenda → Ajustes):
-  TOPE_DIA: 4,                 // máximo de reservas por día, sin importar la franja
-  LIMITE_HORAS_DIA: 6,         // horas ocupadas en Google Calendar (sumadas) que cierran el día en la web
+  TOPE_DIA: 4,                 // citas por FRANJA que la cierran en la web (mañana 00:00–11:59, tarde 12:00–23:59)
+  LIMITE_HORAS_DIA: 6,         // horas ocupadas por FRANJA que la cierran en la web
+  CORTE_FRANJA: 12,            // la mañana termina a las 12:00 y empieza la tarde
   HORAS_SIN_DURACION: 2,       // horas que se asumen para una reserva web sin duración conocida
   FECHA_MAX: '2030-12-31',     // último día reservable en línea (igual que js/booking.js)
   DIAS_CERRADOS: [0, 1],       // domingo y lunes
@@ -271,9 +272,9 @@ function doGet(e) {
   if (accion === 'disponibilidad') {
     var reservas = leerReservas_(), aj = ajustes_();
     var dias = resumenDias_(reservas);
-    var cerrados = diasCerrados_(reservas, aj), modos = modosDias_();
+    var ocupacion = ocupacion_(reservas), cerrados = cerradosPorFranja_(ocupacion, aj), modos = modosDias_();
     return json_({
-      ok: true, dias: dias, tope: aj.tope, cerrados: cerrados, modos: modos,
+      ok: true, dias: dias, tope: aj.tope, limiteHoras: aj.limiteHoras, ocupacion: ocupacion, cerrados: cerrados, modos: modos,
       reglas: obtenerReglas_(),
       bloqueos: bloqueosCompat_(dias, cerrados, modos, aj) // para páginas con la versión anterior en caché
     });
@@ -314,8 +315,8 @@ function doPost(e) {
     try {
       var todas = leerReservas_(), aj = ajustes_();
       var f = r.fecha_solicitada, modoFranja = (modosDias_()[f] || {})[franjaClave_(r.franja)];
-      var decision = evaluarDia_(resumenDias_(todas)[f], r.categoria, r.franja, obtenerReglas_(), aj.tope,
-        modoFranja, diasCerrados_(todas, aj)[f]);
+      var cierre = (cerradosPorFranja_(ocupacion_(todas), aj)[f] || {})[franjaClave_(r.franja)];
+      var decision = evaluarDia_(resumenDias_(todas)[f], r.categoria, r.franja, obtenerReglas_(), modoFranja, cierre);
       if (decision.accion === 'bloquear') {
         if (archivo) archivo.setTrashed(true);
         return json_({ ok: false, error: 'franja_llena', mensaje: decision.mensaje });
@@ -442,9 +443,11 @@ function actualizarReserva_(r, cambios, nota) {
 }
 
 // ------------------------------------------------------------------ Cupos y disponibilidad
-// Regla: cada reserva ocupa espacio desde que entra (aunque el pago no esté validado).
-// El día se cierra con lo que ocurra primero: tope de reservas, horas ocupadas en Google Calendar,
-// bloqueo manual desde el panel, o la matriz de la pestaña "Reglas" (por categoría).
+// Cada FRANJA se llena por separado (mañana 00:00–11:59, tarde 12:00–23:59) al llegar a TOPE_DIA citas o
+// LIMITE_HORAS_DIA horas dentro de ella. Una cita que cruza las 12:00 cuenta como cita en ambas y sus horas se
+// reparten según dónde caen. El día completo se cierra solo si las dos franjas están cerradas.
+// Además: bloqueo/apertura manual por franja desde el panel y la matriz de la pestaña "Reglas" (por categoría).
+// Cada reserva web ocupa espacio desde que entra (aunque el pago no esté validado).
 function tieneHorario_(r) {
   return (r.estado === ESTADOS.CITA_CONFIRMADA || r.estado === ESTADOS.CITA_AGENDADA) && r.fecha_cita && r.hora_inicio && r.hora_fin;
 }
@@ -472,14 +475,13 @@ function resumenDias_(reservas, excluirId) {
  * ¿Se puede pedir esta categoría ese día y franja? → { accion: 'permitir' | 'aprobacion' | 'bloquear', mensaje }
  * Misma lógica que js/booking.js (evaluarDia), para que la página y el servidor decidan igual.
  */
-function evaluarDia_(dia, categoria, franja, reglas, tope, modoFranja, cerradoPorHoras) {
+function evaluarDia_(dia, categoria, franja, reglas, modoFranja, cierreFranja) {
   dia = dia || { total: 0, cats: {} };
-  // Disponibilidad manual del panel para esa franja: 'bloquear' la cierra; 'abrir' ignora horas, tope y
+  // Disponibilidad manual del panel para esa franja: 'bloquear' la cierra; 'abrir' ignora citas, horas y
   // "No permitir" (los avisos de aprobación se mantienen); sin modo = reglas normales.
   if (modoFranja === 'bloquear') return { accion: 'bloquear', mensaje: 'Ese horario no está disponible ese día.' };
   var abierto = modoFranja === 'abrir';
-  if (!abierto && cerradoPorHoras) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' };
-  if (!abierto && dia.total >= (tope || ajustes_().tope)) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' };
+  if (!abierto && cierreFranja) return { accion: 'bloquear', mensaje: 'Ese horario ya está completo.' };
   var cat = norm_(categoria), fr = norm_(franja), resultado = { accion: 'permitir', mensaje: '' };
   reglas.forEach(function (g) {
     if (g.solicitado !== cat) return;
@@ -498,13 +500,12 @@ var MENSAJE_APROBACION = 'Este servicio requiere validación del equipo AMARË a
 /** Franjas cerradas en el formato viejo { fecha: { manana, tarde } } (páginas con booking.js anterior en caché). */
 function bloqueosCompat_(dias, cerrados, modos, aj) {
   var b = {}, fechas = {};
-  [dias, cerrados, modos].forEach(function (m) { Object.keys(m).forEach(function (f) { fechas[f] = 1; }); });
+  [cerrados, modos].forEach(function (m) { Object.keys(m).forEach(function (f) { fechas[f] = 1; }); });
   Object.keys(fechas).forEach(function (f) {
-    var lleno = cerrados[f] || (dias[f] && dias[f].total >= aj.tope);
     var estado = {};
     ['manana', 'tarde'].forEach(function (fr) {
       var modo = (modos[f] || {})[fr];
-      estado[fr] = modo === 'bloquear' || (modo !== 'abrir' && !!lleno);
+      estado[fr] = modo === 'bloquear' || (modo !== 'abrir' && !!(cerrados[f] || {})[fr]);
     });
     if (estado.manana || estado.tarde) b[f] = estado;
   });
@@ -537,44 +538,68 @@ function modosDias_() {
 }
 
 /**
- * Horas ocupadas por día en Google Calendar (todos los eventos con hora, también los creados a mano;
- * los de todo el día no cuentan). Citas en paralelo se suman. Se guarda 2 min en caché porque leer
- * el calendario hasta FECHA_MAX tarda; las acciones del panel limpian la caché.
+ * Reparte un tramo horario [ini, fin) (en horas del día, 0–24) entre mañana y tarde y lo suma a la ocupación:
+ * cada franja que toca recibe +1 cita y las horas que caen en ella.
  */
-function horasCalendario_() {
-  var cache = CacheService.getScriptCache(), guardado = cache.get('HORAS_CAL');
+function sumarTramo_(ocup, fecha, ini, fin) {
+  var corte = CONFIG.CORTE_FRANJA;
+  var partes = { manana: Math.min(fin, corte) - Math.max(ini, 0), tarde: Math.min(fin, 24) - Math.max(ini, corte) };
+  var d = ocup[fecha] = ocup[fecha] || { manana: { citas: 0, horas: 0 }, tarde: { citas: 0, horas: 0 } };
+  ['manana', 'tarde'].forEach(function (fr) {
+    if (partes[fr] <= 0) return;
+    d[fr].citas++;
+    d[fr].horas = Math.round((d[fr].horas + partes[fr]) * 100) / 100;
+  });
+}
+
+/**
+ * Ocupación por franja en Google Calendar (todos los eventos con hora, también los creados a mano; los de todo
+ * el día no cuentan). Se guarda 2 min en caché porque leer el calendario hasta FECHA_MAX tarda; las acciones
+ * del panel limpian la caché.
+ */
+function ocupacionCalendario_() {
+  var cache = CacheService.getScriptCache(), guardado = cache.get('OCUP_CAL');
   if (guardado) return JSON.parse(guardado);
   var hoy = Utilities.formatDate(new Date(), CONFIG.ZONA, 'yyyy-MM-dd');
-  var horas = {};
+  var ocup = {}, hora = function (d) { return Number(Utilities.formatDate(d, CONFIG.ZONA, 'H')) + Number(Utilities.formatDate(d, CONFIG.ZONA, 'm')) / 60; };
   CalendarApp.getDefaultCalendar().getEvents(fechaHora_(hoy, '00:00'), fechaHora_(CONFIG.FECHA_MAX, '23:59')).forEach(function (ev) {
     if (ev.isAllDayEvent()) return;
     var ini = ev.getStartTime(), fin = ev.getEndTime();
     var f = Utilities.formatDate(ini, CONFIG.ZONA, 'yyyy-MM-dd');
-    var finDia = fechaHora_(f, '23:59');
-    var h = (Math.min(fin.getTime(), finDia.getTime()) - ini.getTime()) / 36e5;
-    if (h > 0) horas[f] = Math.round(((horas[f] || 0) + h) * 100) / 100;
+    var finH = Utilities.formatDate(fin, CONFIG.ZONA, 'yyyy-MM-dd') > f ? 24 : hora(fin); // si pasa de medianoche, hasta las 24
+    sumarTramo_(ocup, f, hora(ini), finH);
   });
-  try { cache.put('HORAS_CAL', JSON.stringify(horas), 120); } catch (e) { /* muy grande para la caché */ }
-  return horas;
+  try { cache.put('OCUP_CAL', JSON.stringify(ocup), 120); } catch (e) { /* muy grande para la caché */ }
+  return ocup;
 }
 
-function limpiarCacheCalendario_() { CacheService.getScriptCache().remove('HORAS_CAL'); }
+function limpiarCacheCalendario_() { CacheService.getScriptCache().remove('OCUP_CAL'); }
 
-/** Horas del día = eventos del calendario + duración estimada de reservas web que aún no tienen hora. */
-function horasPorDia_(reservas) {
-  var horas = JSON.parse(JSON.stringify(horasCalendario_()));
+/**
+ * Ocupación por franja = eventos del calendario + reservas web que aún no tienen hora (se ubican al inicio de la
+ * franja que pidieron, 9:00 o 13:00, con su duración estimada; si es larga, también ocupa la tarde).
+ */
+function ocupacion_(reservas) {
+  var ocup = JSON.parse(JSON.stringify(ocupacionCalendario_()));
   reservas.forEach(function (r) {
     if (!esActiva_(r) || tieneHorario_(r) || !r.fecha_solicitada) return;
-    var h = Number(r.dur_max_h) || Number(r.dur_min_h) || CONFIG.HORAS_SIN_DURACION;
-    horas[r.fecha_solicitada] = Math.round(((horas[r.fecha_solicitada] || 0) + h) * 100) / 100;
+    var ini = r.franja === 'Tarde' ? CONFIG.HORA_TARDE[0] : CONFIG.HORA_MANANA[0];
+    var dur = Number(r.dur_max_h) || Number(r.dur_min_h) || CONFIG.HORAS_SIN_DURACION;
+    sumarTramo_(ocup, r.fecha_solicitada, ini, Math.min(ini + dur, 24));
   });
-  return horas;
+  return ocup;
 }
 
-/** { fecha: 'horas' } — días llenos por horas ocupadas en Google Calendar (la disponibilidad manual va aparte, por franja). */
-function diasCerrados_(reservas, aj) {
-  var cerrados = {}, horas = horasPorDia_(reservas);
-  Object.keys(horas).forEach(function (f) { if (horas[f] >= aj.limiteHoras) cerrados[f] = 'horas'; });
+/** { fecha: { manana: 'citas'|'horas', tarde: ... } } — franjas llenas por las reglas automáticas. */
+function cerradosPorFranja_(ocupacion, aj) {
+  var cerrados = {};
+  Object.keys(ocupacion).forEach(function (f) {
+    ['manana', 'tarde'].forEach(function (fr) {
+      var o = ocupacion[f][fr];
+      var motivo = o.citas >= aj.tope ? 'citas' : (o.horas >= aj.limiteHoras ? 'horas' : '');
+      if (motivo) (cerrados[f] = cerrados[f] || {})[fr] = motivo;
+    });
+  });
   return cerrados;
 }
 
@@ -609,8 +634,8 @@ function bloquearDia(fecha, modo, franja) {
 function guardarAjustes(limiteHoras, tope) {
   exigirAdmin_();
   limiteHoras = Number(limiteHoras); tope = Number(tope);
-  if (!(limiteHoras > 0 && limiteHoras <= 24)) throw new Error('Las horas por día deben estar entre 1 y 24.');
-  if (!(tope >= 1 && tope <= 50)) throw new Error('El tope de reservas debe estar entre 1 y 50.');
+  if (!(limiteHoras > 0 && limiteHoras <= 12)) throw new Error('Las horas por franja deben estar entre 1 y 12.');
+  if (!(tope >= 1 && tope <= 50)) throw new Error('Las citas por franja deben estar entre 1 y 50.');
   PropertiesService.getScriptProperties().setProperties({ LIMITE_HORAS_DIA: String(limiteHoras), TOPE_DIA: String(Math.round(tope)) });
   return ajustes_();
 }
@@ -634,7 +659,8 @@ function panelDatos() {
   var desde = Utilities.formatDate(new Date(hoy.getTime() - 14 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
   var hasta = Utilities.formatDate(new Date(hoy.getTime() + 120 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
   return {
-    reservas: reservas, activos: ESTADOS_ACTIVOS, ajustes: ajustes_(), modos: modosDias_(),
+    reservas: reservas, activos: ESTADOS_ACTIVOS, ajustes: ajustes_(), modos: modosDias_(), inicios: { manana: CONFIG.HORA_MANANA[0], tarde: CONFIG.HORA_TARDE[0] },
+    corte: CONFIG.CORTE_FRANJA,
     horasSinDuracion: CONFIG.HORAS_SIN_DURACION,
     hoy: Utilities.formatDate(hoy, CONFIG.ZONA, 'yyyy-MM-dd'),
     agenda: agenda_(desde, hasta, todas), agendaDesde: desde, agendaHasta: hasta
