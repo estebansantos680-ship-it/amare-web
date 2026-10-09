@@ -105,3 +105,26 @@ if __name__ == '__main__':
     for clave, w, h in ANCHAS:
         total += guardar(retocar(componer_ancha(abrir(clave), w, h)), 'real-%s-ancho-%dx%d.webp' % (clave, w, h))
     print('Listo: %d imágenes, %d KB en total' % (len(VERTICALES) + len(ANCHAS), total // 1024))
+
+
+# ---------------------------------------------------------------- Foto del equipo (Sobre nosotros)
+# Viene de WhatsApp (1290x713, con compresión): se limpia el ruido de bloques, se amplía con Lanczos
+# y se le devuelve nitidez. Salen dos tamaños para srcset y un fondo desenfocado para el encabezado.
+def procesar_equipo():
+    im = ImageOps.exif_transpose(Image.open(os.path.join(ORIGEN, 'Equipo.jpg'))).convert('RGB')
+    limpia = Image.blend(im, im.filter(ImageFilter.GaussianBlur(0.7)), 0.45)  # suaviza bloques JPEG sin borrar detalle
+    grande = limpia.resize((round(im.width * 1.5), round(im.height * 1.5)), Image.LANCZOS)
+    grande = ImageEnhance.Contrast(grande).enhance(1.05)
+    grande = ImageEnhance.Color(grande).enhance(1.03)
+    grande = grande.filter(ImageFilter.UnsharpMask(radius=1.8, percent=75, threshold=3))
+    tam = 0
+    for ancho in (1920, 1200):
+        alto = round(grande.height * ancho / grande.width)
+        tam += guardar(grande.resize((ancho, alto), Image.LANCZOS), 'equipo-amare-%d.webp' % ancho)
+    fondo = recortar(grande, 1800, 900).filter(ImageFilter.GaussianBlur(24))
+    tam += guardar(ImageEnhance.Brightness(fondo).enhance(0.9), 'equipo-amare-fondo-1800x900.webp')
+    print('Equipo listo: %d KB' % (tam // 1024), grande.size)
+
+
+if __name__ == '__main__':
+    procesar_equipo()

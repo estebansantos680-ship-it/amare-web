@@ -790,3 +790,20 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
 }
 .admin-link:hover{ background:var(--black); color:var(--cream); border-color:var(--black); }
 .admin-link svg{ width:16px; height:16px; }
+
+/* ---------- Foto del equipo (Sobre nosotros): protagonista, a todo el ancho y sin oscurecer ---------- */
+.team-feature{ position:relative; z-index:2; margin-top:calc(-1 * clamp(36px, 6vw, 96px)); padding-bottom:clamp(20px, 3vw, 40px); }
+.team-photo{ position:relative; margin:0; border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow);
+  background:var(--sand); aspect-ratio:1920/1062; }
+.team-photo img{ width:100%; height:100%; object-fit:cover; display:block; }
+.team-photo figcaption{ position:absolute; left:0; right:0; bottom:0; padding:clamp(18px, 3vw, 36px) clamp(20px, 3.5vw, 44px);
+  background:linear-gradient(180deg, transparent, rgba(11,11,11,.72)); color:var(--cream); }
+.team-photo figcaption .eyebrow{ color:var(--taupe); }
+.team-photo figcaption h2{ color:var(--cream); font-size:clamp(1.4rem, 2.8vw, 2.3rem); margin-top:6px; }
+.team-photo figcaption h2 em{ font-style:italic; color:var(--taupe); }
+@media (max-width:640px){
+  /* En el celular el texto va debajo para no tapar a nadie */
+  .team-photo{ aspect-ratio:auto; }
+  .team-photo img{ height:auto; }
+  .team-photo figcaption{ position:static; background:var(--black); }
+}
