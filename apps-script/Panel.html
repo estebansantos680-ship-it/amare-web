@@ -88,6 +88,12 @@
   .dia-cab.cerrado-web{ box-shadow:inset 0 -3px 0 var(--bad); }
   .dia-cab small.abierto{ color:var(--ok); font-weight:600; }
   .opcion .btn:disabled{ opacity:.5; cursor:default; }
+  .modo-fila{ display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 0; border-top:1px solid var(--line); margin-top:10px; }
+  .modo-fila > span{ font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; }
+  .modo-botones{ display:flex; gap:6px; }
+  .modo-botones .btn{ padding:8px 10px; font-size:10px; }
+  .modo-botones .btn.actual{ opacity:1; outline:2px solid var(--black); outline-offset:2px; cursor:default; }
+  @media (max-width:640px){ .hoja .modo-botones .btn{ flex:1 1 auto; } .modo-botones{ width:100%; } }
   .btn-dia{ margin-top:4px; background:none; border:1px solid var(--line); font:inherit; font-size:10px; font-weight:600; padding:3px 6px; cursor:pointer; color:var(--black); }
   .btn-dia:hover{ border-color:var(--black); }
   .extras{ border-left:1px solid var(--line); border-bottom:1px solid var(--line); padding:3px; min-height:20px; min-width:0; }
@@ -147,7 +153,7 @@
 <div class="aviso" id="aviso"></div>
 
 <script>
-  var DATOS = { reservas: [], ajustes: { limiteHoras: 6, tope: 4 }, bloqueados: [], abiertos: [], horasSinDuracion: 2,
+  var DATOS = { reservas: [], ajustes: { limiteHoras: 6, tope: 4 }, modos: {}, horasSinDuracion: 2,
                 activos: ['pago_por_validar','pago_aprobado','cita_agendada','cita_confirmada'], agenda: [], hoy: '' };
   var ARRASTRANDO = null;  // id de la reserva que se está arrastrando hacia una pestaña
   var CARGA = {};          // fecha -> ocupación, calculada aquí mismo para que sea instantánea
@@ -204,20 +210,43 @@
     });
     return Math.round(h * 10) / 10;
   }
-  /** Modo elegido a mano para el día: 'bloquear' | 'abrir' | 'auto' */
-  function modoDia(f){
-    if (DATOS.bloqueados.indexOf(f) >= 0) return 'bloquear';
-    if ((DATOS.abiertos || []).indexOf(f) >= 0) return 'abrir';
-    return 'auto';
-  }
-  /** Por qué la web no ofrece ese día: 'manual' | 'horas' | 'tope' | '' (un día abierto a mano nunca se cierra) */
-  function motivoCierre(f){
-    var modo = modoDia(f);
-    if (modo === 'bloquear') return 'manual';
-    if (modo === 'abrir') return '';
+  // ---------------------------------------------------------------- disponibilidad en la web (día, mañana, tarde)
+  var FRANJAS = [['manana', 'Mañana'], ['tarde', 'Tarde']];
+  /** Modo manual de una franja: 'bloquear' | 'abrir' | 'auto' */
+  function modoFranja(f, fr){ return ((DATOS.modos || {})[f] || {})[fr] || 'auto'; }
+  /** Cierre automático del día por las reglas: 'horas' | 'tope' | '' */
+  function cierreAuto(f){
     if (CACHE[f] && horasDia(f) >= DATOS.ajustes.limiteHoras) return 'horas';
     if ((CARGA[f] || 0) >= DATOS.ajustes.tope) return 'tope';
     return '';
+  }
+  /** Estado de una franja en la web: 'bloqueada' | 'abierta' | 'horas' | 'tope' | 'libre' */
+  function estadoFranja(f, fr){
+    var m = modoFranja(f, fr);
+    if (m === 'bloquear') return 'bloqueada';
+    if (m === 'abrir') return 'abierta';
+    return cierreAuto(f) || 'libre';
+  }
+  function franjaCerrada(e){ return e === 'bloqueada' || e === 'horas' || e === 'tope'; }
+  /** El día no se ofrece en la web solo si mañana y tarde están cerradas. */
+  function motivoCierre(f){
+    var m = estadoFranja(f, 'manana'), t = estadoFranja(f, 'tarde');
+    if (!franjaCerrada(m) || !franjaCerrada(t)) return '';
+    return m === t ? (m === 'bloqueada' ? 'manual' : m) : 'mixto';
+  }
+  var TEXTO_ESTADO = { bloqueada: 'bloqueada a mano', abierta: 'abierta a mano', horas: 'llena por horas', tope: 'llena por reservas', libre: 'disponible' };
+  /** Resumen corto para el encabezado del día en la Agenda. */
+  function resumenDisponibilidad(f){
+    var m = estadoFranja(f, 'manana'), t = estadoFranja(f, 'tarde');
+    if (m === t) {
+      if (m === 'libre') return '';
+      var txt = { bloqueada: 'Bloqueado a mano', abierta: 'Abierto a mano', horas: 'Lleno por horas', tope: 'Lleno por reservas' }[m];
+      return '<small class="' + (m === 'abierta' ? 'abierto' : 'llena') + '">' + txt + '</small>';
+    }
+    return FRANJAS.map(function(x){
+      var e = x[0] === 'manana' ? m : t;
+      return '<small class="' + (e === 'abierta' ? 'abierto' : (franjaCerrada(e) ? 'llena' : '')) + '">' + x[1] + ': ' + TEXTO_ESTADO[e] + '</small>';
+    }).join('');
   }
 
   function calcularCarga(){
@@ -373,13 +402,12 @@
     h += '<div class="dia-cab" style="border-left:0"></div>';
     dias.forEach(function(f){
       var c = CARGA[f] || 0, hs = horasDia(f), A = DATOS.ajustes;
-      var motivo = motivoCierre(f), modo = modoDia(f);
+      var motivo = motivoCierre(f);
       var cerr = DIAS_CERRADOS.indexOf(fechaD(f).getDay()) >= 0;
       var pasado = f < DATOS.hoy;
       h += '<div class="dia-cab' + (f === DATOS.hoy ? ' hoy' : (cerr ? ' cerrado' : '')) + (motivo ? ' cerrado-web' : '') + '"><b><span class="largo">' + fechaCorta(f) + '</span><span class="corto">' + diaCorto(f) + '</span></b>' +
         '<small><span class="largo">' + hs + '/' + A.limiteHoras + ' h · ' + c + '/' + A.tope + ' reservas</span><span class="corto">' + hs + 'h · ' + c + '/' + A.tope + '</span></small>' +
-        (motivo ? '<small class="llena">' + { manual: 'Bloqueado a mano', horas: 'Lleno por horas', tope: 'Lleno por reservas' }[motivo] + '</small>' : '') +
-        (modo === 'abrir' ? '<small class="abierto">Abierto a mano</small>' : '') +
+        resumenDisponibilidad(f) +
         (pasado ? '' : '<button class="btn-dia" onclick="pedirModoDia(\'' + f + '\')">Disponibilidad</button>') +
         '</div>';
     });
@@ -426,37 +454,45 @@
     document.getElementById('modal').classList.add('abierto');
   }
   /**
-   * Disponibilidad de un día en la web, a decisión del admin:
-   *  auto     → reglas normales (horas, tope de reservas y matriz).
-   *  bloquear → no aparece en la web aunque tenga espacio.
-   *  abrir    → aparece en la web aunque las reglas lo cierren (ignora horas, tope y "No permitir" de la matriz).
+   * Disponibilidad en la web, a decisión del admin, para el día completo, la mañana o la tarde:
+   *  Automático → reglas normales (horas, tope de reservas y matriz).
+   *  Bloquear   → no se ofrece en la web aunque haya espacio.
+   *  Abrir      → se ofrece aunque las reglas lo cierren (ignora horas, tope y "No permitir" de la matriz).
    */
   function pedirModoDia(f){
-    var actual = modoDia(f), motivo = motivoCierre(f);
-    var estado = { bloquear: 'Bloqueado a mano', abrir: 'Abierto a mano (ignora las reglas)', auto: motivo ? 'Cerrado por las reglas (' + { horas: 'horas', tope: 'reservas' }[motivo] + ')' : 'Automático (disponible según las reglas)' }[actual];
-    var op = function(modo, titulo, nota, clase){
-      return '<div class="opcion"><button class="btn ' + clase + '"' + (modo === actual ? ' disabled' : '') + ' onclick="cambiarModoDia(\'' + f + '\',\'' + modo + '\')">' + titulo + (modo === actual ? ' (actual)' : '') + '</button><small>' + nota + '</small></div>';
+    var mm = modoFranja(f, 'manana'), mt = modoFranja(f, 'tarde');
+    var fila = function(franja, titulo, actual){
+      var b = function(modo, texto, clase){
+        var es = modo === actual;
+        return '<button class="btn ' + clase + (es ? ' actual' : '') + '"' + (es ? ' disabled' : '') +
+          ' onclick="cambiarModoDia(\'' + f + '\',\'' + modo + '\',\'' + franja + '\')">' + texto + '</button>';
+      };
+      return '<div class="modo-fila"><span>' + titulo + '</span><div class="modo-botones">' +
+        b('auto', 'Automático', 'sec') + b('bloquear', 'Bloquear', 'bad') + b('abrir', 'Abrir', 'ok') + '</div></div>';
     };
     document.getElementById('hoja').innerHTML =
       '<span class="chip">Disponibilidad en la web</span><h3>' + fechaLarga(f) + '</h3>' +
-      '<div class="fila"><span>Ahora</span>' + estado + '</div>' +
+      '<div class="fila"><span>Ahora</span>Mañana: ' + TEXTO_ESTADO[estadoFranja(f, 'manana')] + ' · Tarde: ' + TEXTO_ESTADO[estadoFranja(f, 'tarde')] + '</div>' +
       '<div class="fila"><span>Ocupación</span>' + horasDia(f) + ' de ' + DATOS.ajustes.limiteHoras + ' h · ' + (CARGA[f] || 0) + ' de ' + DATOS.ajustes.tope + ' reservas</div>' +
-      op('abrir', 'Abrir día', 'Aparece disponible en amarecr.com aunque esté lleno por horas, por reservas o por la matriz de reglas. Úsalo cuando sabes que sí hay espacio.', 'ok') +
-      op('bloquear', 'Bloquear día', 'No aparece en amarecr.com aunque tenga espacio (feriados, vacaciones, eventos).', 'bad') +
-      op('auto', 'Automático', 'Vuelve a las reglas normales: horas, tope de reservas y matriz.', 'sec') +
-      '<p class="nota">Las citas que ya existen no cambian; desde el panel siempre puedes agendar ese día.</p>' +
-      '<div class="acciones"><button class="btn sec" onclick="cerrarModal()">Cancelar</button></div>';
+      fila('dia', 'Día completo', mm === mt ? mm : '') +
+      fila('manana', 'Mañana', mm) +
+      fila('tarde', 'Tarde', mt) +
+      '<p class="nota"><b>Bloquear:</b> no se ofrece en amarecr.com aunque haya espacio (feriados, vacaciones, eventos). ' +
+      '<b>Abrir:</b> se ofrece aunque esté lleno por horas, reservas o la matriz de reglas. <b>Automático:</b> reglas normales. ' +
+      'Las citas que ya existen no cambian; desde el panel siempre puedes agendar.</p>' +
+      '<div class="acciones"><button class="btn sec" onclick="cerrarModal()">Listo</button></div>';
     document.getElementById('modal').classList.add('abierto');
   }
-  function cambiarModoDia(f, modo){
-    cerrarModal();
-    DATOS.bloqueados = DATOS.bloqueados.filter(function(x){ return x !== f; });
-    DATOS.abiertos = (DATOS.abiertos || []).filter(function(x){ return x !== f; });
-    if (modo === 'bloquear') DATOS.bloqueados.push(f);
-    if (modo === 'abrir') DATOS.abiertos.push(f);
+  function cambiarModoDia(f, modo, franja){
+    DATOS.modos = DATOS.modos || {};
+    var dia = DATOS.modos[f] || {};
+    (franja === 'dia' ? ['manana', 'tarde'] : [franja]).forEach(function(fr){ if (modo === 'auto') delete dia[fr]; else dia[fr] = modo; });
+    if (dia.manana || dia.tarde) DATOS.modos[f] = dia; else delete DATOS.modos[f];
     pintar();
-    aviso({ bloquear: 'Día bloqueado para la web.', abrir: 'Día abierto en la web (ignora las reglas).', auto: 'Día en modo automático.' }[modo]);
-    COLA.push({ fn: 'bloquearDia', args: [f, modo], textoListo: 'Guardado ✓' });
+    pedirModoDia(f);   // la ventana queda abierta mostrando el cambio
+    var que = { dia: 'Día', manana: 'Mañana', tarde: 'Tarde' }[franja];
+    aviso(que + ': ' + { bloquear: 'bloqueada para la web.', abrir: 'abierta en la web (ignora las reglas).', auto: 'en automático.' }[modo]);
+    COLA.push({ fn: 'bloquearDia', args: [f, modo, franja], textoListo: 'Guardado ✓' });
     procesarCola();
   }
 
@@ -488,8 +524,8 @@
   // ---------------------------------------------------------------- tarjetas
   function textoCarga(fecha){
     var c = CARGA[fecha] || 0, hs = horasDia(fecha), A = DATOS.ajustes, motivo = motivoCierre(fecha);
-    var txt = { manual: ' · día bloqueado para la web', horas: ' · lleno por horas para la web', tope: ' · lleno por reservas para la web' }[motivo] ||
-      (modoDia(fecha) === 'abrir' ? ' · abierto a mano en la web' : '');
+    var m = estadoFranja(fecha, 'manana'), t = estadoFranja(fecha, 'tarde');
+    var txt = (m === 'libre' && t === 'libre') ? '' : ' · en la web: mañana ' + TEXTO_ESTADO[m] + ', tarde ' + TEXTO_ESTADO[t];
     return '<div class="carga' + (motivo ? ' llena' : '') + '">Ese día: ' + hs + ' de ' + A.limiteHoras + ' h ocupadas · ' + c + ' de ' + A.tope + ' reservas' + txt + '. Tú decides si agendar igual.</div>';
   }
   function chipEstado(e){
@@ -618,7 +654,7 @@
       .withSuccessHandler(function(res){
         var r = reservaPorId(t.id);
         if (r && res && res.reserva) Object.keys(res.reserva).forEach(function(k){ r[k] = res.reserva[k]; });
-        if (res && res.bloqueados) { DATOS.bloqueados = res.bloqueados; DATOS.abiertos = res.abiertos || []; } // bloquearDia
+        if (res && res.modos) DATOS.modos = res.modos;                    // bloquearDia
         if (res && res.limiteHoras) DATOS.ajustes = res;                     // guardarAjustes
         OCUPADO = false;
         if (res && res.correo === false) aviso('Guardado, pero el correo a la clienta NO salió. Revisa EmailJS.', true);

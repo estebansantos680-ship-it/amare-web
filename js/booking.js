@@ -281,7 +281,7 @@
   var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   // Hasta dónde se puede reservar en línea (último día incluido).
   var FECHA_MAX = new Date(2030, 11, 31, 23, 59);
-  var dispo = { dias: {}, reglas: [], tope: 4, cerrados: {}, abiertos: [] };
+  var dispo = { dias: {}, reglas: [], tope: 4, cerrados: {}, modos: {} };
   var mesVisible = null;
 
   function toLocalISODate(d) {
@@ -295,7 +295,7 @@
     if (!API_URL) return Promise.resolve();
     return fetch(API_URL + '?accion=disponibilidad&t=' + Date.now())
       .then(function (r) { return r.json(); })
-      .then(function (j) { if (j && j.ok && j.dias) dispo = { dias: j.dias, reglas: j.reglas || [], tope: j.tope || 4, cerrados: j.cerrados || {}, abiertos: j.abiertos || [] }; })
+      .then(function (j) { if (j && j.ok && j.dias) dispo = { dias: j.dias, reglas: j.reglas || [], tope: j.tope || 4, cerrados: j.cerrados || {}, modos: j.modos || {} }; })
       .catch(function () { /* sin conexión al servidor: solo se bloquean días cerrados */ });
   }
 
@@ -306,8 +306,11 @@
   // Misma lógica que el servidor (Codigo.gs → evaluarDia_): { accion: 'permitir' | 'aprobacion' | 'bloquear', mensaje }
   function evaluarDia(iso, franja) {
     var dia = dispo.dias[iso] || { total: 0, cats: {} };
-    if (dispo.cerrados[iso]) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' }; // horas del calendario o bloqueo del admin
-    var abierto = dispo.abiertos.indexOf(iso) >= 0; // "Abrir día" del panel: ignora tope y "No permitir"
+    // Disponibilidad manual del panel para esa franja: bloquear la cierra; abrir ignora horas, tope y "No permitir".
+    var modo = (dispo.modos[iso] || {})[norm(franja) === 'tarde' ? 'tarde' : 'manana'];
+    if (modo === 'bloquear') return { accion: 'bloquear', mensaje: 'Ese horario no está disponible ese día.' };
+    var abierto = modo === 'abrir';
+    if (!abierto && dispo.cerrados[iso]) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' }; // horas del calendario
     if (!abierto && dia.total >= dispo.tope) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' };
     var cat = norm(state.service && state.service.categoria), fr = norm(franja);
     var res = { accion: 'permitir', mensaje: '' };
@@ -434,7 +437,7 @@
       var llena = !!state.fecha && evaluarDia(state.fecha, btn.getAttribute('data-franja')).accion === 'bloquear';
       btn.disabled = llena;
       btn.classList.toggle('llena', llena);
-      btn.textContent = btn.getAttribute('data-franja') + (llena ? ' · lleno' : '');
+      btn.textContent = btn.getAttribute('data-franja') + (llena ? ' · no disponible' : '');
     });
   }
 

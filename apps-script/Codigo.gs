@@ -271,11 +271,11 @@ function doGet(e) {
   if (accion === 'disponibilidad') {
     var reservas = leerReservas_(), aj = ajustes_();
     var dias = resumenDias_(reservas);
-    var cerrados = diasCerrados_(reservas, aj);
+    var cerrados = diasCerrados_(reservas, aj), modos = modosDias_();
     return json_({
-      ok: true, dias: dias, tope: aj.tope, cerrados: cerrados, abiertos: diasAbiertos_(),
+      ok: true, dias: dias, tope: aj.tope, cerrados: cerrados, modos: modos,
       reglas: obtenerReglas_(),
-      bloqueos: bloqueosCompat_(dias, cerrados, aj) // para páginas con la versión anterior en caché
+      bloqueos: bloqueosCompat_(dias, cerrados, modos, aj) // para páginas con la versión anterior en caché
     });
   }
   if (!esAdmin_()) {
@@ -313,10 +313,9 @@ function doPost(e) {
     lock.waitLock(30000);
     try {
       var todas = leerReservas_(), aj = ajustes_();
-      var cerrado = diasCerrados_(todas, aj, r.fecha_solicitada)[r.fecha_solicitada];
-      var decision = cerrado ? { accion: 'bloquear', mensaje: 'Ese día ya está completo.' }
-        : evaluarDia_(resumenDias_(todas)[r.fecha_solicitada], r.categoria, r.franja, obtenerReglas_(), aj.tope,
-            diasAbiertos_().indexOf(r.fecha_solicitada) >= 0);
+      var f = r.fecha_solicitada, modoFranja = (modosDias_()[f] || {})[franjaClave_(r.franja)];
+      var decision = evaluarDia_(resumenDias_(todas)[f], r.categoria, r.franja, obtenerReglas_(), aj.tope,
+        modoFranja, diasCerrados_(todas, aj)[f]);
       if (decision.accion === 'bloquear') {
         if (archivo) archivo.setTrashed(true);
         return json_({ ok: false, error: 'franja_llena', mensaje: decision.mensaje });
@@ -473,9 +472,13 @@ function resumenDias_(reservas, excluirId) {
  * ¿Se puede pedir esta categoría ese día y franja? → { accion: 'permitir' | 'aprobacion' | 'bloquear', mensaje }
  * Misma lógica que js/booking.js (evaluarDia), para que la página y el servidor decidan igual.
  */
-function evaluarDia_(dia, categoria, franja, reglas, tope, abierto) {
+function evaluarDia_(dia, categoria, franja, reglas, tope, modoFranja, cerradoPorHoras) {
   dia = dia || { total: 0, cats: {} };
-  // "Abrir día" desde el panel: ignora el tope y los "No permitir" (los avisos de aprobación se mantienen).
+  // Disponibilidad manual del panel para esa franja: 'bloquear' la cierra; 'abrir' ignora horas, tope y
+  // "No permitir" (los avisos de aprobación se mantienen); sin modo = reglas normales.
+  if (modoFranja === 'bloquear') return { accion: 'bloquear', mensaje: 'Ese horario no está disponible ese día.' };
+  var abierto = modoFranja === 'abrir';
+  if (!abierto && cerradoPorHoras) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' };
   if (!abierto && dia.total >= (tope || ajustes_().tope)) return { accion: 'bloquear', mensaje: 'Ese día ya está completo.' };
   var cat = norm_(categoria), fr = norm_(franja), resultado = { accion: 'permitir', mensaje: '' };
   reglas.forEach(function (g) {
@@ -492,14 +495,23 @@ function evaluarDia_(dia, categoria, franja, reglas, tope, abierto) {
 
 var MENSAJE_APROBACION = 'Este servicio requiere validación del equipo AMARË antes de confirmar la reserva.';
 
-/** Días cerrados en el formato viejo { fecha: { manana, tarde } } (páginas con booking.js anterior en caché). */
-function bloqueosCompat_(dias, cerrados, aj) {
-  var b = {};
-  var abiertos = diasAbiertos_();
-  Object.keys(dias).forEach(function (f) { if (dias[f].total >= aj.tope && abiertos.indexOf(f) < 0) b[f] = { manana: true, tarde: true }; });
-  Object.keys(cerrados).forEach(function (f) { b[f] = { manana: true, tarde: true }; });
+/** Franjas cerradas en el formato viejo { fecha: { manana, tarde } } (páginas con booking.js anterior en caché). */
+function bloqueosCompat_(dias, cerrados, modos, aj) {
+  var b = {}, fechas = {};
+  [dias, cerrados, modos].forEach(function (m) { Object.keys(m).forEach(function (f) { fechas[f] = 1; }); });
+  Object.keys(fechas).forEach(function (f) {
+    var lleno = cerrados[f] || (dias[f] && dias[f].total >= aj.tope);
+    var estado = {};
+    ['manana', 'tarde'].forEach(function (fr) {
+      var modo = (modos[f] || {})[fr];
+      estado[fr] = modo === 'bloquear' || (modo !== 'abrir' && !!lleno);
+    });
+    if (estado.manana || estado.tarde) b[f] = estado;
+  });
   return b;
 }
+
+function franjaClave_(franja) { return norm_(franja) === 'tarde' ? 'tarde' : 'manana'; }
 
 // ------------------------------------------------------------------ Ajustes y bloqueos de día (los cambia el admin)
 function ajustes_() {
@@ -511,9 +523,18 @@ function ajustes_() {
 function listaFechas_(clave) {
   try { return JSON.parse(PropertiesService.getScriptProperties().getProperty(clave) || '[]'); } catch (e) { return []; }
 }
-function diasBloqueados_() { return listaFechas_('DIAS_BLOQUEADOS'); }
-/** Días que el admin abrió a mano: la web los ofrece aunque estén llenos por horas, tope o la matriz. */
-function diasAbiertos_() { return listaFechas_('DIAS_ABIERTOS'); }
+
+/**
+ * Disponibilidad manual por franja: { 'yyyy-MM-dd': { manana: 'bloquear'|'abrir', tarde: 'bloquear'|'abrir' } }.
+ * Sin entrada = automático. Incluye las listas de la versión anterior (DIAS_BLOQUEADOS / DIAS_ABIERTOS = día completo).
+ */
+function modosDias_() {
+  var mapa = {};
+  try { mapa = JSON.parse(PropertiesService.getScriptProperties().getProperty('DISPONIBILIDAD_MANUAL') || '{}'); } catch (e) { mapa = {}; }
+  listaFechas_('DIAS_BLOQUEADOS').forEach(function (f) { mapa[f] = mapa[f] || { manana: 'bloquear', tarde: 'bloquear' }; });
+  listaFechas_('DIAS_ABIERTOS').forEach(function (f) { mapa[f] = mapa[f] || { manana: 'abrir', tarde: 'abrir' }; });
+  return mapa;
+}
 
 /**
  * Horas ocupadas por día en Google Calendar (todos los eventos con hora, también los creados a mano;
@@ -550,35 +571,38 @@ function horasPorDia_(reservas) {
   return horas;
 }
 
-/** { fecha: 'manual' | 'horas' } — días que la web no ofrece (además del tope y la matriz). */
+/** { fecha: 'horas' } — días llenos por horas ocupadas en Google Calendar (la disponibilidad manual va aparte, por franja). */
 function diasCerrados_(reservas, aj) {
   var cerrados = {}, horas = horasPorDia_(reservas);
   Object.keys(horas).forEach(function (f) { if (horas[f] >= aj.limiteHoras) cerrados[f] = 'horas'; });
-  diasAbiertos_().forEach(function (f) { delete cerrados[f]; });
-  diasBloqueados_().forEach(function (f) { cerrados[f] = 'manual'; });
   return cerrados;
 }
 
 /**
- * Disponibilidad manual de un día desde el panel.
- * modo: 'bloquear' (no aparece en la web) · 'abrir' (aparece aunque las reglas lo cierren) · 'auto' (reglas normales).
- * También acepta true/false (versión anterior del panel: bloquear / auto).
+ * Disponibilidad manual desde el panel, por día completo o por franja.
+ * modo: 'bloquear' (no se ofrece en la web) · 'abrir' (se ofrece aunque las reglas la cierren) · 'auto' (reglas normales).
+ * franja: 'dia' (mañana y tarde) · 'manana' · 'tarde'. Acepta true/false (versión anterior: bloquear / auto).
  */
-function bloquearDia(fecha, modo) {
+function bloquearDia(fecha, modo, franja) {
   exigirAdmin_();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error('Fecha inválida.');
   if (modo === true) modo = 'bloquear';
   if (modo === false) modo = 'auto';
+  franja = franja || 'dia';
   if (['bloquear', 'abrir', 'auto'].indexOf(modo) < 0) throw new Error('Modo inválido.');
+  if (['dia', 'manana', 'tarde'].indexOf(franja) < 0) throw new Error('Franja inválida.');
   var hoy = Utilities.formatDate(new Date(), CONFIG.ZONA, 'yyyy-MM-dd');
+  var mapa = modosDias_(), limpio = {};
+  Object.keys(mapa).forEach(function (f) { if (f >= hoy) limpio[f] = mapa[f]; }); // quita días pasados
+  var dia = limpio[fecha] || {};
+  (franja === 'dia' ? ['manana', 'tarde'] : [franja]).forEach(function (fr) {
+    if (modo === 'auto') delete dia[fr]; else dia[fr] = modo;
+  });
+  if (dia.manana || dia.tarde) limpio[fecha] = dia; else delete limpio[fecha];
   var props = PropertiesService.getScriptProperties();
-  var limpiar = function (lista) { return lista.filter(function (f) { return f !== fecha && f >= hoy; }); }; // quita días pasados
-  var bloqueados = limpiar(diasBloqueados_()), abiertos = limpiar(diasAbiertos_());
-  if (modo === 'bloquear') bloqueados.push(fecha);
-  if (modo === 'abrir') abiertos.push(fecha);
-  bloqueados.sort(); abiertos.sort();
-  props.setProperties({ DIAS_BLOQUEADOS: JSON.stringify(bloqueados), DIAS_ABIERTOS: JSON.stringify(abiertos) });
-  return { bloqueados: bloqueados, abiertos: abiertos };
+  props.setProperty('DISPONIBILIDAD_MANUAL', JSON.stringify(limpio));
+  props.deleteProperty('DIAS_BLOQUEADOS'); props.deleteProperty('DIAS_ABIERTOS'); // ya migradas al mapa
+  return { modos: limpio };
 }
 
 /** Ajustes editables desde el panel. */
@@ -610,7 +634,7 @@ function panelDatos() {
   var desde = Utilities.formatDate(new Date(hoy.getTime() - 14 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
   var hasta = Utilities.formatDate(new Date(hoy.getTime() + 120 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
   return {
-    reservas: reservas, activos: ESTADOS_ACTIVOS, ajustes: ajustes_(), bloqueados: diasBloqueados_(), abiertos: diasAbiertos_(),
+    reservas: reservas, activos: ESTADOS_ACTIVOS, ajustes: ajustes_(), modos: modosDias_(),
     horasSinDuracion: CONFIG.HORAS_SIN_DURACION,
     hoy: Utilities.formatDate(hoy, CONFIG.ZONA, 'yyyy-MM-dd'),
     agenda: agenda_(desde, hasta, todas), agendaDesde: desde, agendaHasta: hasta
