@@ -43,7 +43,13 @@ En cada template: To Email `{{correo}}`, From Name `Amarë Beauty Center`, Reply
 ## Reglas de disponibilidad
 - Domingo y lunes cerrados para la web. Se puede reservar en línea hasta el 31/12/2030 (`FECHA_MAX` en `js/booking.js`).
 - Cada reserva ocupa espacio desde que entra (pago por validar, aprobado, agendada o confirmada).
-- Tope de seguridad: `CONFIG.TOPE_DIA` (6) reservas por día, sin importar la franja.
+- Cupo por FRANJA: mañana (00:00–11:59) y tarde (12:00–23:59) se llenan por separado al llegar a
+  `TOPE_DIA` citas (4) o `LIMITE_HORAS_DIA` horas (6) dentro de cada una (editables en el panel: Agenda → Ajustes).
+  Cuentan todos los eventos con hora de Google Calendar y las reservas web sin hora (ubicadas a las 9:00 o 13:00
+  con su duración estimada). Una cita que cruza las 12:00 cuenta como cita en ambas y sus horas se reparten.
+  El día completo se cierra solo si las dos franjas están cerradas.
+- Disponibilidad manual por día o franja (panel → botón Disponibilidad): Bloquear / Abrir / Automático
+  (propiedad DISPONIBILIDAD_MANUAL).
 - Matriz por categoría: pestaña **Reglas** de la hoja "Amarë · Reservas" (copiada del Blueprint la primera vez).
   Si el día ya tiene las categorías "Existente 1-3" y alguien pide la "Solicitado":
   - **No permitir** → ese servicio se cierra ese día (franja o día completo).
