@@ -295,10 +295,12 @@
     if (m === 'bloquear') return 'bloqueada';
     var auto = cierreAuto(f, fr);
     if (auto === 'bloqueo') return 'bloqueo';   // un espacio bloqueado gana incluso a "Abrir"
+    // Domingo y lunes: cerrados salvo "Abrir"; abiertos así siguen con el cupo normal (citas y horas).
+    if (DIAS_CERRADOS.indexOf(fechaD(f).getDay()) >= 0) return m === 'abrir' ? (auto || 'abierta') : 'nolaboral';
     if (m === 'abrir') return 'abierta';
     return auto || 'libre';
   }
-  function franjaCerrada(e){ return e === 'pasada' || e === 'bloqueada' || e === 'horas' || e === 'citas' || e === 'bloqueo'; }
+  function franjaCerrada(e){ return e === 'pasada' || e === 'bloqueada' || e === 'horas' || e === 'citas' || e === 'bloqueo' || e === 'nolaboral'; }
   /** "3/6 h · 2/4 citas" de una franja */
   function textoOcupacion(o){ return o.horas + '/' + DATOS.ajustes.limiteHoras + ' h · ' + o.citas + '/' + DATOS.ajustes.tope + ' citas'; }
   /** El día no se ofrece en la web solo si mañana y tarde están cerradas. */
@@ -307,13 +309,14 @@
     if (!franjaCerrada(m) || !franjaCerrada(t)) return '';
     return m === t ? (m === 'bloqueada' ? 'manual' : m) : 'mixto';
   }
-  var TEXTO_ESTADO = { bloqueo: 'espacio bloqueado', bloqueada: 'bloqueada a mano', abierta: 'abierta a mano', horas: 'llena por horas', citas: 'llena por citas', pasada: 'ya pasó', libre: 'disponible' };
+  var TEXTO_ESTADO = { nolaboral: 'cerrado (no laboral)', bloqueo: 'espacio bloqueado', bloqueada: 'bloqueada a mano', abierta: 'abierta a mano', horas: 'llena por horas', citas: 'llena por citas', pasada: 'ya pasó', libre: 'disponible' };
   /** Resumen corto para el encabezado del día en la Agenda. */
   function resumenDisponibilidad(f){
     if (f < DATOS.hoy) return '';
     var m = estadoFranja(f, 'manana'), t = estadoFranja(f, 'tarde');
     if (m === t) {
       if (m === 'libre') return '';
+      if (m === 'nolaboral') return '';
       var txt = { bloqueo: 'Espacio bloqueado', bloqueada: 'Bloqueado a mano', abierta: 'Abierto a mano', horas: 'Lleno por horas', citas: 'Lleno por citas', pasada: 'Ya cerró por hoy' }[m];
       return '<small class="' + (m === 'abierta' ? 'abierto' : 'llena') + '">' + txt + '</small>';
     }
@@ -594,7 +597,7 @@
       fila('manana', 'Mañana', mm) +
       fila('tarde', 'Tarde', mt) +
       '<p class="nota"><b>Bloquear:</b> no se ofrece en amarecr.com aunque haya espacio (feriados, vacaciones, eventos). ' +
-      '<b>Abrir:</b> se ofrece aunque esté lleno por horas, reservas o la matriz de reglas. <b>Automático:</b> reglas normales. ' +
+      '<b>Abrir:</b> se ofrece aunque esté lleno por horas, reservas o la matriz de reglas. En <b>domingo o lunes</b>, "Abrir" habilita ese día (o la franja) en la web con el cupo normal de citas y horas. <b>Automático:</b> reglas normales. ' +
       'Las citas que ya existen no cambian; desde el panel siempre puedes agendar.</p>' +
       '<div class="acciones"><button class="btn sec" onclick="cerrarModal()">Listo</button></div>';
     document.getElementById('modal').classList.add('abierto');

@@ -415,8 +415,11 @@ function validarReserva_(x) {
   r.comentarios = texto(x.comentarios, 1000);
   if (r.nombre.length < 3 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(r.correo) || !r.servicio) return { error: 'datos_incompletos' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(r.fecha_solicitada)) return { error: 'fecha_invalida' };
-  var d = fechaDesdeISO_(r.fecha_solicitada);
-  if (CONFIG.DIAS_CERRADOS.indexOf(d.getDay()) >= 0) return { error: 'dia_cerrado' };
+  // Domingo y lunes: solo si el panel abrió ese día (o una franja); evaluarHora_ revisa la franja exacta.
+  if (diaNoLaboral_(r.fecha_solicitada)) {
+    var modoDia = modosDias_()[r.fecha_solicitada] || {};
+    if (modoDia.manana !== 'abrir' && modoDia.tarde !== 'abrir') return { error: 'dia_cerrado' };
+  }
   return r;
 }
 
@@ -593,15 +596,24 @@ function franjasDeTramo_(ini, fin) {
 function evaluarHora_(reservas, aj, fecha, hora, dur, categoria) {
   if (horaPasada_(fecha, hora)) return { accion: 'bloquear', mensaje: 'Ese horario de hoy ya pasó.' };
   var modos = modosDias_()[fecha] || {}, cierres = cerradosPorFranja_(ocupacion_(reservas), aj)[fecha] || {};
+  var noLaboral = diaNoLaboral_(fecha);
   var franjas = franjasDeTramo_(hora, hora + dur);
   for (var i = 0; i < franjas.length; i++) {
     var fr = franjas[i], cierre = cierres[fr], modo = modos[fr];
     if (cierre === 'bloqueo') return { accion: 'bloquear', mensaje: 'Ese horario no está disponible ese día.' };
     if (modo === 'bloquear') return { accion: 'bloquear', mensaje: 'Ese horario no está disponible ese día.' };
-    if (cierre && modo !== 'abrir') return { accion: 'bloquear', mensaje: 'Ese horario ya está completo.' };
+    // Domingo/lunes abierto a mano: la franja se ofrece, pero con el cupo normal (citas y horas).
+    if (noLaboral && modo !== 'abrir') return { accion: 'bloquear', mensaje: 'Ese día no abrimos en ese horario.' };
+    if (cierre && (modo !== 'abrir' || noLaboral)) return { accion: 'bloquear', mensaje: 'Ese horario ya está completo.' };
   }
   var inicial = franjas[0] === 'tarde' || hora >= CONFIG.CORTE_FRANJA ? 'Tarde' : 'Mañana';
-  return evaluarDia_(resumenDias_(reservas)[fecha], categoria, inicial, obtenerReglas_(), modos[franjaClave_(inicial)], '');
+  var modoInicial = noLaboral ? '' : modos[franjaClave_(inicial)];
+  return evaluarDia_(resumenDias_(reservas)[fecha], categoria, inicial, obtenerReglas_(), modoInicial, '');
+}
+
+/** Domingo y lunes (CONFIG.DIAS_CERRADOS): cerrados salvo que el panel los abra. */
+function diaNoLaboral_(fecha) {
+  return CONFIG.DIAS_CERRADOS.indexOf(fechaDesdeISO_(fecha).getDay()) >= 0;
 }
 
 /** ¿La hora de inicio de hoy ya pasó? (hora de Costa Rica) */

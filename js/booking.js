@@ -332,11 +332,11 @@
   }
 
   // Misma lógica que el servidor (Codigo.gs → evaluarDia_): { accion: 'permitir' | 'aprobacion' | 'bloquear', mensaje }
-  function evaluarDia(iso, franja, soloMatriz) {
+  function evaluarDia(iso, franja, soloMatriz, noLaboral) {
     var dia = dispo.dias[iso] || { total: 0, cats: {} };
     var clave = norm(franja) === 'tarde' ? 'tarde' : 'manana';
     var modo = (dispo.modos[iso] || {})[clave];
-    var abierto = modo === 'abrir';
+    var abierto = modo === 'abrir' && !noLaboral;
     if (!soloMatriz) {
       // Si esa franja de hoy ya pasó, no se puede reservar (ni aunque esté abierta a mano).
       if (franjaPasada(iso, clave)) return { accion: 'bloquear', mensaje: 'Ese horario de hoy ya pasó.' };
@@ -389,13 +389,21 @@
   function evaluarHora(iso, hora) {
     if (horaPasada(iso, hora)) return { accion: 'bloquear', mensaje: 'Ese horario de hoy ya pasó.' };
     var modos = dispo.modos[iso] || {}, cierres = dispo.cerrados[iso] || {};
+    var noLaboral = diaNoLaboral(iso);
     var franjas = franjasDeTramo(hora, hora + duracionEstimada());
     for (var i = 0; i < franjas.length; i++) {
       var fr = franjas[i], cierre = cierres[fr], modo = modos[fr];
       if (cierre === 'bloqueo' || modo === 'bloquear') return { accion: 'bloquear', mensaje: 'Ese horario no está disponible ese día.' };
-      if (cierre && modo !== 'abrir') return { accion: 'bloquear', mensaje: 'Ese horario ya está completo.' };
+      // Domingo/lunes abierto desde el panel: se ofrece con el cupo normal.
+      if (noLaboral && modo !== 'abrir') return { accion: 'bloquear', mensaje: 'Ese día no abrimos en ese horario.' };
+      if (cierre && (modo !== 'abrir' || noLaboral)) return { accion: 'bloquear', mensaje: 'Ese horario ya está completo.' };
     }
-    return evaluarDia(iso, hora >= CORTE_FRANJA ? 'Tarde' : 'Mañana', true);
+    return evaluarDia(iso, hora >= CORTE_FRANJA ? 'Tarde' : 'Mañana', true, noLaboral);
+  }
+
+  function diaNoLaboral(iso) {
+    var dia = new Date(iso + 'T12:00:00').getDay();
+    return dia === 0 || dia === 1;
   }
 
   // Devuelve null si el día se puede elegir, o el motivo del bloqueo.
@@ -404,7 +412,11 @@
     var horas = horasServicio();
     // Días anteriores, y hoy cuando ya pasó la última hora de inicio del servicio (hora de Costa Rica).
     if (horaPasada(iso, Math.max.apply(null, horas))) return 'pasado';
-    if (d.getDay() === 0 || d.getDay() === 1) return 'cerrado';
+    // Domingo y lunes: cerrados, salvo que el salón abra ese día (o una franja) desde el panel.
+    if (diaNoLaboral(iso)) {
+      var m = dispo.modos[iso] || {};
+      if (m.manana !== 'abrir' && m.tarde !== 'abrir') return 'cerrado';
+    }
     if (d > FECHA_MAX) return 'lejos';
     if (horas.every(function (h) { return evaluarHora(iso, h).accion === 'bloquear'; })) return 'lleno';
     return null;
