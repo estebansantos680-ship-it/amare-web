@@ -77,7 +77,9 @@ var CONFIG = {
       cita_actualizada: ['nombre', 'servicio', 'fecha', 'hora'],
       recordatorio_3_dias: ['nombre', 'servicio', 'fecha', 'hora', 'direccion'],
       recordatorio_1_dia: ['nombre', 'servicio', 'fecha', 'hora', 'direccion']
-    }
+    },
+    // Encabezado con imagen (tarjeta de marca) de cada plantilla: tools/generar_whatsapp_headers.py → assets/wa/
+    imagenes: 'https://amarecr.com/assets/wa/'
   }
 };
 
@@ -1159,6 +1161,9 @@ function enviarWhatsApp_(plantilla, r) {
   var orden = CONFIG.WHATSAPP_API.plantillas[plantilla];
   if (!tel || !orden) return false;
   var p = PropertiesService.getScriptProperties();
+  // Modo prueba: si WHATSAPP_SOLO_NUMERO tiene un número, solo se le envía a ese (las clientas reales no reciben nada).
+  var soloA = String(p.getProperty('WHATSAPP_SOLO_NUMERO') || '').replace(/\D/g, '');
+  if (soloA && tel !== soloA) { console.log('WhatsApp en modo prueba: no se envía a ' + tel); return false; }
   var vals = {
     nombre: String(r.nombre || '').split(' ')[0] || 'clienta', servicio: r.servicio,
     fecha: fechaLarga_(r.fecha_cita || r.fecha_solicitada),
@@ -1171,11 +1176,33 @@ function enviarWhatsApp_(plantilla, r) {
     payload: JSON.stringify({
       messaging_product: 'whatsapp', to: tel, type: 'template',
       template: { name: plantilla, language: { code: CONFIG.WHATSAPP_API.idioma },
-        components: [{ type: 'body', parameters: orden.map(function (k) { return { type: 'text', text: String(vals[k] || '') }; }) }] }
+        components: componentesWhatsApp_(plantilla, orden, vals) }
     })
   });
   if (resp.getResponseCode() >= 300) { console.error('WhatsApp ' + plantilla + ': ' + resp.getResponseCode() + ' ' + resp.getContentText()); return false; }
   return true;
+}
+
+function componentesWhatsApp_(plantilla, orden, vals) {
+  var c = [];
+  if (CONFIG.WHATSAPP_API.imagenes) c.push({ type: 'header', parameters: [{ type: 'image', image: { link: CONFIG.WHATSAPP_API.imagenes + plantilla + '.jpg' } }] });
+  c.push({ type: 'body', parameters: orden.map(function (k) { return { type: 'text', text: String(vals[k] || '') }; }) });
+  return c;
+}
+
+/**
+ * Prueba desde el editor: envía las 5 plantillas SOLO al número de prueba (WHATSAPP_SOLO_NUMERO, o el que se pase).
+ * No toca la hoja ni el calendario. Ver el resultado en el registro de ejecución.
+ */
+function probarWhatsApp(numero) {
+  var p = PropertiesService.getScriptProperties();
+  var tel = String(numero || p.getProperty('WHATSAPP_SOLO_NUMERO') || '').replace(/\D/g, '');
+  if (!tel) throw new Error('Pon el número de prueba en la propiedad WHATSAPP_SOLO_NUMERO (ej. 50672808979).');
+  var hoy = Utilities.formatDate(new Date(Date.now() + 3 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
+  var r = { nombre: 'Prueba Amarë', celular: tel, servicio: 'Balayage', fecha_solicitada: hoy, fecha_cita: hoy, hora_inicio: '09:00' };
+  Object.keys(CONFIG.WHATSAPP_API.plantillas).forEach(function (pl) {
+    console.log(pl + ': ' + (enviarWhatsApp_(pl, r) ? 'enviado' : 'NO salió (ver errores arriba)'));
+  });
 }
 
 // ------------------------------------------------------------------ Correos
