@@ -1255,6 +1255,7 @@ function probarCorreo() {
 
 function enviarCorreo_(clave, r, extra) {
   var template = PropertiesService.getScriptProperties().getProperty('TEMPLATE_' + clave) || CONFIG.EMAILJS.templates[clave];
+  if (!template && CORREOS_DIRECTOS[clave]) return enviarCorreoDirecto_(clave, r, extra);
   if (!template) { console.warn('Template sin configurar: ' + clave); return false; }
   var params = parametrosCorreo_(r);
   Object.keys(extra || {}).forEach(function (k) { params[k] = extra[k]; });
@@ -1279,6 +1280,43 @@ function enviarCorreo_(clave, r, extra) {
     return false;
   }
   return true;
+}
+
+/**
+ * Correos que no están en EmailJS: se envían desde la cuenta del salón (Gmail) con el HTML publicado en
+ * amarecr.com/emails (generado por tools/generar_correos.py). Respuestas → citas@amarecr.com.
+ */
+var CORREOS_DIRECTOS = {
+  recordatorio3d: { archivo: 'recordatorio-3dias.html', asunto: 'Su cita en Amarë es en 3 días · {{servicio}}' }
+};
+
+function enviarCorreoDirecto_(clave, r, extra) {
+  var def = CORREOS_DIRECTOS[clave];
+  if (!r.correo) return false;
+  try {
+    var cache = CacheService.getScriptCache(), html = cache.get('CORREO_' + clave);
+    if (!html) {
+      html = UrlFetchApp.fetch('https://amarecr.com/emails/' + def.archivo).getContentText('UTF-8');
+      try { cache.put('CORREO_' + clave, html, 21600); } catch (e) { /* muy grande */ }
+    }
+    var params = parametrosCorreo_(r);
+    Object.keys(extra || {}).forEach(function (k) { params[k] = extra[k]; });
+    var llenar = function (t) { return t.replace(/\{\{(\w+)\}\}/g, function (m, k) { return params[k] == null ? '' : String(params[k]); }); };
+    MailApp.sendEmail({ to: r.correo, subject: llenar(def.asunto), htmlBody: llenar(html),
+      name: 'Amarë Beauty Center', replyTo: CONFIG.CORREO_CITAS });
+    return true;
+  } catch (e) {
+    console.error('Correo directo ' + clave + ': ' + e);
+    return false;
+  }
+}
+
+/** Prueba desde el editor: manda el recordatorio de 3 días de muestra al correo de pruebas (no toca la hoja). */
+function probarRecordatorio3d() {
+  var dia = Utilities.formatDate(new Date(Date.now() + 3 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
+  var r = { nombre: 'Prueba Amarë', correo: 'estebansantos680@gmail.com', servicio: 'Balayage', categoria: 'Técnica de Color',
+            largo: 'Mediano', fecha_cita: dia, fecha_solicitada: dia, hora_inicio: '09:00', hora_fin: '13:00', dur_min_h: 4, dur_max_h: 4, id: 'PRUEBA' };
+  console.log('Recordatorio 3 días: ' + (enviarCorreoDirecto_('recordatorio3d', r) ? 'enviado' : 'NO salió'));
 }
 
 function avisarAdmin_(r) {
