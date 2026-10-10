@@ -11,6 +11,10 @@ window.AMARE_SERVICES = [
     "deposito": true,
     "diagnostico": true,
     "horario": "9:00 a.m. y 1:00 p.m.",
+    "horas": [
+      9,
+      13
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -49,6 +53,10 @@ window.AMARE_SERVICES = [
     "deposito": true,
     "diagnostico": true,
     "horario": "9:00 a.m. y 1:00 p.m.",
+    "horas": [
+      9,
+      13
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -87,6 +95,10 @@ window.AMARE_SERVICES = [
     "deposito": true,
     "diagnostico": true,
     "horario": "9:00 a.m. y 1:00 p.m.",
+    "horas": [
+      9,
+      13
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -125,6 +137,10 @@ window.AMARE_SERVICES = [
     "deposito": true,
     "diagnostico": true,
     "horario": "9:00 a.m. y 1:00 p.m.",
+    "horas": [
+      9,
+      13
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -163,6 +179,10 @@ window.AMARE_SERVICES = [
     "deposito": true,
     "diagnostico": true,
     "horario": "9:00 a.m. y 1:00 p.m.",
+    "horas": [
+      9,
+      13
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -201,6 +221,10 @@ window.AMARE_SERVICES = [
     "deposito": true,
     "diagnostico": true,
     "horario": "9:00 a.m. y 1:00 p.m.",
+    "horas": [
+      9,
+      13
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -239,6 +263,10 @@ window.AMARE_SERVICES = [
     "deposito": true,
     "diagnostico": true,
     "horario": "9:00 a.m. y 1:00 p.m.",
+    "horas": [
+      9,
+      13
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -276,7 +304,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Tratamiento disciplinante que combina hidratación profunda y reparación de la fibra capilar con un efecto de alisado natural. Reduce el frizz y el volumen, proporcionando un alisado aproximado del 40% al 60%, dejando el cabello más suave, brillante y fácil de peinar.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -314,7 +347,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Versión especializada del Botox Alisante, formulada para cabellos rubios, decolorados o con mechas. Su tecnología ayuda a preservar la tonalidad del color mientras hidrata, reconstruye la fibra capilar y proporciona un alisado aproximado del 40% al 60%, con mayor brillo y suavidad.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -352,7 +390,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Tratamiento de alto rendimiento que combina la nutrición intensiva del Botox Alisante con el poder de nuestra Nanoplastia Premium. Repara profundamente la fibra capilar, elimina el frizz y consigue un alisado del 90% al 100%, ofreciendo un cabello disciplinado, brillante y de larga duración.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -390,7 +433,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Nuestro tratamiento Premium para cabellos rubios o con procesos de decoloración. Combina el Botox Alisante para Rubias con la Nanoplastia Premium, protegiendo la tonalidad del cabello mientras reconstruye profundamente la fibra capilar y proporciona un alisado del 90% al 100%, con máxima suavidad, brillo y control del frizz.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -428,7 +476,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Tratamientos especializados que restauran la fibra capilar desde el interior, fortaleciendo el cabello dañado por procesos químicos, decoloraciones o herramientas de calor. Devuelven resistencia, elasticidad, suavidad y un aspecto visiblemente más saludable.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": true,
     "tiers": {
       "Corto": {
@@ -466,7 +519,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Diseñados para devolver al cabello los nutrientes esenciales que necesita para mantenerse fuerte, sedoso y brillante. Ideales para cabellos secos, opacos o con pérdida de vitalidad, proporcionando una hidratación profunda y un acabado suave.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": true,
     "tiers": {
       "Corto": {
@@ -504,7 +562,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Aportan una hidratación intensiva que ayuda a recuperar la suavidad, el brillo y la flexibilidad natural del cabello. Recomendados para cabellos resecos o deshidratados que necesitan revitalizarse sin alterar su estructura.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": true,
     "tiers": {
       "Corto": {
@@ -542,7 +605,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Tratamiento intensivo que fortalece la fibra capilar desde el interior, ayudando a reducir el quiebre y mejorar la resistencia del cabello. Ideal para cabellos debilitados que necesitan recuperar fuerza, cuerpo y vitalidad.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": true,
     "tiers": {
       "Corto": {
@@ -580,7 +648,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Tratamiento purificante que elimina residuos de productos, contaminación, grasa e impurezas acumuladas en el cuero cabelludo y la fibra capilar. Deja el cabello más ligero, limpio y preparado para absorber mejor los tratamientos posteriores.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": true,
     "tiers": {
       "Corto": {
@@ -618,7 +691,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Procedimiento especializado que elimina residuos de minerales y metales acumulados por el agua, procesos químicos o factores ambientales. Ayuda a mejorar la salud del cabello, protege el color y optimiza los resultados de coloraciones y tratamientos capilares.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": true,
     "tiers": {
       "Corto": {
@@ -656,7 +734,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Tratamiento diseñado para fortalecer el cuero cabelludo y estimular un ambiente saludable para el crecimiento capilar. Ayuda a disminuir la caída ocasionada por debilitamiento de la fibra mientras fortalece el cabello desde la raíz.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": true,
     "tiers": {
       "Corto": {
@@ -694,7 +777,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Tratamiento personalizado que combina activos concentrados y ampollas de alto rendimiento para fortalecer la fibra capilar, estimular el crecimiento saludable y mejorar la densidad, resistencia y vitalidad del cabello.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": true,
     "tiers": {
       "Corto": {
@@ -732,7 +820,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Terapia enriquecida con vitaminas y nutrientes esenciales que revitalizan el cabello desde el interior, mejorando su hidratación, brillo, elasticidad y resistencia para un aspecto más saludable y lleno de vida.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": true,
     "tiers": {
       "Corto": {
@@ -770,7 +863,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Tecnología que ayuda a sellar la cutícula del cabello, potenciando la absorción de los activos nutritivos y prolongando los beneficios del tratamiento. El resultado es un cabello más brillante, suave y protegido frente a las agresiones externas.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": true,
     "tiers": {
       "Corto": {
@@ -808,7 +906,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Tecnología capilar que estimula la circulación del cuero cabelludo, favoreciendo la oxigenación y fortaleciendo los folículos pilosos. Ideal como complemento en tratamientos de fortalecimiento y crecimiento del cabello.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": true,
     "tiers": {
       "Corto": {
@@ -846,7 +949,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Tratamiento que realza el brillo natural del cabello, sella la cutícula y aporta una apariencia más saludable y luminosa. Ideal para revitalizar el color y mejorar la suavidad sin modificar el tono.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": true,
     "tiers": {
       "Corto": {
@@ -885,6 +993,10 @@ window.AMARE_SERVICES = [
     "deposito": true,
     "diagnostico": true,
     "horario": "9:00 a.m. y 1:00 p.m.",
+    "horas": [
+      9,
+      13
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -923,6 +1035,10 @@ window.AMARE_SERVICES = [
     "deposito": true,
     "diagnostico": true,
     "horario": "9:00 a.m. y 1:00 p.m.",
+    "horas": [
+      9,
+      13
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -961,6 +1077,10 @@ window.AMARE_SERVICES = [
     "deposito": true,
     "diagnostico": true,
     "horario": "9:00 a.m. y 1:00 p.m.",
+    "horas": [
+      9,
+      13
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -999,6 +1119,10 @@ window.AMARE_SERVICES = [
     "deposito": true,
     "diagnostico": true,
     "horario": "9:00 a.m. y 1:00 p.m.",
+    "horas": [
+      9,
+      13
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -1037,6 +1161,10 @@ window.AMARE_SERVICES = [
     "deposito": true,
     "diagnostico": true,
     "horario": "9:00 a.m. y 1:00 p.m.",
+    "horas": [
+      9,
+      13
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -1075,6 +1203,10 @@ window.AMARE_SERVICES = [
     "deposito": true,
     "diagnostico": true,
     "horario": "9:00 a.m. y 1:00 p.m.",
+    "horas": [
+      9,
+      13
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -1113,6 +1245,10 @@ window.AMARE_SERVICES = [
     "deposito": true,
     "diagnostico": true,
     "horario": "9:00 a.m. y 1:00 p.m.",
+    "horas": [
+      9,
+      13
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -1151,6 +1287,10 @@ window.AMARE_SERVICES = [
     "deposito": true,
     "diagnostico": true,
     "horario": "9:00 a.m. y 1:00 p.m.",
+    "horas": [
+      9,
+      13
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -1188,7 +1328,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Servicio de coloración uniforme que renueva o cambia el tono del cabello desde la raíz hasta las puntas, proporcionando un color intenso, homogéneo y lleno de brillo.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -1226,7 +1371,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Coloración completa acompañada de un tratamiento capilar personalizado que protege la fibra capilar, aporta hidratación y ayuda a mantener el cabello saludable, suave y brillante después del proceso químico.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -1264,7 +1414,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Servicio ideal para retocar el crecimiento y revitalizar el color de medios y puntas, devolviendo intensidad, brillo y uniformidad al cabello sin necesidad de una coloración completa.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -1302,7 +1457,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Combina el retoque de raíz con un tratamiento intensivo de ampollas que hidratan, nutren y fortalecen la fibra capilar, dejando el cabello más suave, brillante y saludable.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -1340,7 +1500,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Corte personalizado según la forma del rostro, tipo de cabello y estilo de vida. Diseñado para resaltar la belleza natural de cada cliente con un acabado profesional y fácil de mantener.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m., 10:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -1378,7 +1543,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Corte masculino realizado con técnicas modernas y asesoría personalizada para lograr un estilo limpio, actual y adaptado a la imagen de cada cliente.",
     "deposito": false,
     "diagnostico": true,
-    "horario": "9:00 a.m., 10:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -1416,7 +1586,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Experiencia completa que incluye corte, lavado profesional y secado con acabado final, dejando el cabello limpio, fresco y perfectamente estilizado.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -1454,7 +1629,12 @@ window.AMARE_SERVICES = [
     "descripcion": "Servicio integral que incluye asesoría, corte personalizado, lavado profesional, secado y planchado para lograr un acabado impecable, elegante y listo para cualquier ocasión.",
     "deposito": true,
     "diagnostico": true,
-    "horario": "9:00 a.m. y 1:00 p.m. y 3:00 p.m.",
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
     "pesoLiviano": false,
     "tiers": {
       "Corto": {
@@ -1480,6 +1660,92 @@ window.AMARE_SERVICES = [
         "max": 25000,
         "durMin": 2.5,
         "durMax": 2.5
+      }
+    }
+  },
+  {
+    "codigo": "CR-001",
+    "categoria": "Tratamiento en Rizos",
+    "categoriaSlug": "rizos",
+    "categoriaFile": "servicios-rizos.html",
+    "servicio": "Tratamiento reconstructivo o nutritivo en rizos + Estilizado",
+    "descripcion": "Tratamiento reconstructivo o nutritivo para cabello rizado, con estilizado final de los rizos.",
+    "deposito": true,
+    "diagnostico": true,
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
+    "pesoLiviano": false,
+    "tiers": {
+      "Corto": {
+        "min": 20000,
+        "max": 20000,
+        "durMin": 1.5,
+        "durMax": 1.5
+      },
+      "Mediano": {
+        "min": 25000,
+        "max": 25000,
+        "durMin": 2.5,
+        "durMax": 2.5
+      },
+      "Largo": {
+        "min": 30000,
+        "max": 30000,
+        "durMin": 2.5,
+        "durMax": 2.5
+      },
+      "Extra largo": {
+        "min": 35000,
+        "max": 35000,
+        "durMin": 2.5,
+        "durMax": 2.5
+      }
+    }
+  },
+  {
+    "codigo": "CR-002",
+    "categoria": "Tratamiento en Rizos",
+    "categoriaSlug": "rizos",
+    "categoriaFile": "servicios-rizos.html",
+    "servicio": "Estilización en cabello rizado",
+    "descripcion": "Estilización profesional para cabello rizado.",
+    "deposito": true,
+    "diagnostico": true,
+    "horario": "9:00 a.m., 1:00 p.m. y 3:00 p.m.",
+    "horas": [
+      9,
+      13,
+      15
+    ],
+    "pesoLiviano": false,
+    "tiers": {
+      "Corto": {
+        "min": 10000,
+        "max": 10000,
+        "durMin": 1,
+        "durMax": 1
+      },
+      "Mediano": {
+        "min": 12500,
+        "max": 12500,
+        "durMin": 2,
+        "durMax": 2
+      },
+      "Largo": {
+        "min": 15000,
+        "max": 15000,
+        "durMin": 2,
+        "durMax": 2
+      },
+      "Extra largo": {
+        "min": 17500,
+        "max": 17500,
+        "durMin": 2,
+        "durMax": 2
       }
     }
   }

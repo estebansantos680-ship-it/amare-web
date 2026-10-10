@@ -93,11 +93,12 @@ select:focus-visible, textarea:focus-visible{
 }
 
 /* ---------- TOP BAR ---------- */
-.topbar{ background:var(--black); color:rgba(245,243,239,.78); font-size:.7rem; letter-spacing:.08em; }
+.topbar{ background:var(--black); color:rgba(245,243,239,.9); font-size:.74rem; letter-spacing:.08em; }
 .topbar .wrap{
   display:flex; justify-content:space-between; align-items:center;
   padding-top:9px; padding-bottom:9px; gap:16px;
 }
+.topbar-loc{ color:var(--cream); font-weight:600; letter-spacing:.12em; text-transform:uppercase; white-space:nowrap; margin-left:auto; }
 .topbar-phone{ color:var(--cream); white-space:nowrap; }
 .topbar-phone:hover{ color:var(--taupe); }
 
@@ -116,8 +117,8 @@ nav.wrap{
 }
 .nav-links{ display:flex; gap:clamp(16px, 2.2vw, 32px); }
 .nav-links a{
-  position:relative; padding:4px 0; color:var(--ink);
-  font-size:.72rem; font-weight:500; letter-spacing:.18em; text-transform:uppercase;
+  position:relative; padding:4px 0; color:var(--black);
+  font-size:.72rem; font-weight:700; letter-spacing:.18em; text-transform:uppercase;
 }
 .nav-links a::after{
   content:''; position:absolute; left:50%; bottom:-3px; width:0; height:1px;
@@ -360,7 +361,8 @@ nav.wrap{
 /* ---------- VALORES ---------- */
 .values{ padding:clamp(70px, 9vw, 110px) 0; background:var(--cream); text-align:center; }
 .values h2{ font-size:clamp(2rem, 4vw, 3rem); margin-bottom:10px; }
-.values-tagline{ font-family:var(--serif); font-style:italic; font-size:1.25rem; color:var(--taupe-deep); margin-bottom:48px; }
+.values .eyebrow{ font-size:1.25rem; letter-spacing:.3em; color:var(--taupe-deep); }
+.values-tagline{ font-family:var(--serif); font-style:italic; font-weight:700; font-size:clamp(1.7rem, 3vw, 2.3rem); color:var(--black); margin-bottom:48px; }
 .value-list{
   margin:0 auto; max-width:980px; padding:0;
   display:grid; grid-template-columns:repeat(3, 1fr); gap:1px; text-align:left;
@@ -377,6 +379,8 @@ nav.wrap{
   font-family:var(--sans); font-size:.66rem; letter-spacing:.14em; color:var(--taupe-deep);
 }
 .value-list li:hover{ background:var(--black); color:var(--cream); }
+/* Escritorio (3 columnas): "Educación constante", el último, queda centrado en su fila */
+@media (min-width:1025px){ .value-list li:last-child:nth-child(3n+1){ grid-column:2; } .value-list{ background:transparent; border:0; border-radius:0; overflow:visible; } .value-list li{ box-shadow:0 0 0 1px var(--line); } }
 
 /* ---------- GALERÍA ---------- */
 .gallery{ padding:clamp(60px, 8vw, 100px) 0; text-align:center; background:var(--cream); }
@@ -476,6 +480,10 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
 }
 .foot-social a:hover{ background:var(--cream); color:var(--black); }
 .foot-social svg{ width:16px; height:16px; }
+/* Acceso de administración: discreto, al final del pie */
+.admin-foot{ color:inherit; opacity:.45; padding:4px 6px; display:inline-flex; vertical-align:middle; }
+.admin-foot svg{ width:13px; height:13px; }
+.admin-foot:hover{ opacity:1; color:var(--taupe); }
 
 /* ---------- WhatsApp flotante ---------- */
 .wa-float{
@@ -606,6 +614,24 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
 .upload-preview .info small{ display:block; color:var(--muted); }
 .pago-nota{ margin-top:14px; font-size:.8rem; color:var(--muted); }
 .booking-panel .upload-zona[hidden], .upload-preview[hidden], .pago-box[hidden]{ display:none; }
+.pago-box .pago-titulo{ font-size:.72rem; color:var(--black); }
+.pago-link-leyenda{ font-size:.86rem; color:var(--ink); margin:10px 0 4px; }
+.btn-link-pago{ display:inline-block; margin-top:12px; }
+/* Fotos del cabello (paso 4) */
+.fotos-cabello{ border:1px solid var(--line); background:#fff; padding:18px; margin:14px 0 6px; }
+.fotos-cabello[hidden]{ display:none; }
+.fotos-titulo{ font-size:.72rem; letter-spacing:.18em; text-transform:uppercase; font-weight:600; margin-bottom:8px; }
+.fotos-titulo .req{ text-transform:none; letter-spacing:0; color:#8a2a2a; font-weight:600; }
+.fotos-titulo .optional{ letter-spacing:.12em; }
+.fotos-ayuda{ font-size:.86rem; color:var(--ink); margin-bottom:10px; }
+.fotos-ayuda[hidden]{ display:none; }
+.upload-zona.invalid{ border-color:#a33 !important; }
+.fotos-lista{ display:flex; flex-wrap:wrap; gap:10px; margin:12px 0 4px; }
+.foto-item{ position:relative; width:84px; height:84px; }
+.foto-item img{ width:100%; height:100%; object-fit:cover; border:1px solid var(--line); }
+.foto-quitar{ position:absolute; top:-8px; right:-8px; width:24px; height:24px; border-radius:50%; border:none; background:var(--black); color:var(--cream); cursor:pointer; font-size:1rem; line-height:24px; padding:0; }
+.hora-grid{ grid-template-columns:repeat(3, 1fr); }
+.booking-help-inline{ margin:22px 0 0; max-width:none; }
 @media (max-width:420px){
   .pago-pasos{ margin-left:14px; }
   .pago-dato code{ font-size:.8rem; letter-spacing:0; padding:5px 7px; }
@@ -614,7 +640,7 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
 /* ---------- BOOKING (simulador de reservas) ---------- */
 .booking{ padding:clamp(50px, 7vw, 80px) 0 clamp(70px, 9vw, 100px); }
 .booking-box{ max-width:760px; margin:0 auto; background:var(--paper); border:1px solid var(--line); border-radius:var(--radius-lg); box-shadow:var(--shadow); padding:clamp(24px, 5vw, 48px); }
-.booking-steps{ display:flex; flex-wrap:wrap; gap:8px 20px; margin-bottom:32px; padding-bottom:18px; border-bottom:1px solid var(--line); }
+.booking-steps{ display:flex; flex-wrap:wrap; gap:8px 20px; margin-bottom:32px; padding-bottom:18px; }
 .booking-steps .step{ font-size:.62rem; letter-spacing:.2em; text-transform:uppercase; font-weight:600; color:rgba(11,11,11,.4); }
 .booking-steps .step.active{ color:var(--black); }
 .booking-steps .step.done{ color:var(--taupe-deep); }
@@ -731,7 +757,8 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
 @media (max-width:600px){
   body{ font-size:14.5px; }
   .topbar .topbar-msg{ display:none; }
-  .topbar .wrap{ justify-content:center; }
+  .topbar .wrap{ justify-content:space-between; }
+  .topbar-loc{ margin-left:0; font-size:.64rem; }
   .btn-perfil{ padding:10px 14px; font-size:.58rem; letter-spacing:.16em; }
   .logo-lockup .logo-word{ font-size:1.45rem; }
   .hero-actions .btn{ flex:1 1 100%; }

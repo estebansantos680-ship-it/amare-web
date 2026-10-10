@@ -43,8 +43,10 @@
     lengthLabel: null,
     tier: null,
     fecha: null,
-    franja: null,
+    franja: null,  // texto de la hora elegida, ej. "9:00 a.m."
+    hora: null,    // hora de inicio (9, 13 o 15)
     cliente: null,
+    fotos: [],     // fotos del cabello (File ya optimizado), máx. MAX_FOTOS
     comprobante: null, // File (JPG/PNG/PDF) del SINPE/transferencia
   };
 
@@ -112,7 +114,18 @@
     lengthGrid: document.getElementById('lengthGrid'),
     toStep3: document.getElementById('toStep3'),
     inpFecha: document.getElementById('inpFecha'),
-    franjaButtons: document.querySelectorAll('.franja-option'),
+    horaGrid: document.getElementById('horaGrid'),
+    horaNota: document.getElementById('horaNota'),
+    selTipoCliente: document.getElementById('selTipoCliente'),
+    fotosCabello: document.getElementById('fotosCabello'),
+    fotosRequisito: document.getElementById('fotosRequisito'),
+    fotosRegular: document.getElementById('fotosRegular'),
+    fotosZona: document.getElementById('fotosZona'),
+    inpFotos: document.getElementById('inpFotos'),
+    fotosLista: document.getElementById('fotosLista'),
+    inpExpectativas: document.getElementById('inpExpectativas'),
+    chkWhatsapp: document.getElementById('chkWhatsapp'),
+    btnLinkPago: document.getElementById('btnLinkPago'),
     availabilityResult: document.getElementById('availabilityResult'),
     toStep4: document.getElementById('toStep4'),
     inpNombre: document.getElementById('inpNombre'),
@@ -265,6 +278,7 @@
   }
 
   els.toStep3.addEventListener('click', function () {
+    resetFranjaSelection();
     if (!state.tier) return;
     goToStep(3);
     prepararPaso3();
@@ -318,17 +332,20 @@
   }
 
   // Misma lógica que el servidor (Codigo.gs → evaluarDia_): { accion: 'permitir' | 'aprobacion' | 'bloquear', mensaje }
-  function evaluarDia(iso, franja) {
+  function evaluarDia(iso, franja, soloMatriz) {
     var dia = dispo.dias[iso] || { total: 0, cats: {} };
     var clave = norm(franja) === 'tarde' ? 'tarde' : 'manana';
-    // Si esa franja de hoy ya pasó, no se puede reservar (ni aunque esté abierta a mano).
-    if (franjaPasada(iso, clave)) return { accion: 'bloquear', mensaje: 'Ese horario de hoy ya pasó.' };
-    // Disponibilidad manual del panel para esa franja: bloquear la cierra; abrir ignora horas, tope y "No permitir".
     var modo = (dispo.modos[iso] || {})[clave];
-    if (modo === 'bloquear') return { accion: 'bloquear', mensaje: 'Ese horario no está disponible ese día.' };
     var abierto = modo === 'abrir';
-    // Cada franja se llena sola (citas u horas dentro de ella, según Google Calendar y reservas web).
-    if (!abierto && (dispo.cerrados[iso] || {})[clave]) return { accion: 'bloquear', mensaje: 'Ese horario ya está completo.' };
+    if (!soloMatriz) {
+      // Si esa franja de hoy ya pasó, no se puede reservar (ni aunque esté abierta a mano).
+      if (franjaPasada(iso, clave)) return { accion: 'bloquear', mensaje: 'Ese horario de hoy ya pasó.' };
+      // Disponibilidad manual del panel para esa franja: bloquear la cierra; abrir ignora horas, tope y "No permitir".
+      if (modo === 'bloquear') return { accion: 'bloquear', mensaje: 'Ese horario no está disponible ese día.' };
+      // Cada franja se llena sola (citas u horas dentro de ella, según Google Calendar y reservas web).
+      var cierre = (dispo.cerrados[iso] || {})[clave];
+      if (cierre === 'bloqueo' || (!abierto && cierre)) return { accion: 'bloquear', mensaje: 'Ese horario ya está completo.' };
+    }
     var cat = norm(state.service && state.service.categoria), fr = norm(franja);
     var res = { accion: 'permitir', mensaje: '' };
     dispo.reglas.forEach(function (g) {
@@ -344,17 +361,52 @@
   }
   var MENSAJE_APROBACION = 'Este servicio requiere validación del equipo AMARË antes de confirmar la reserva.';
 
-  function esServicioLargo() {
-    return state.tier && Number(state.tier.durMax) > 4;
+  // Horas de inicio: las de cada servicio (columna "Horario" del catálogo).
+  var CORTE_FRANJA = 12;
+  function horasServicio() {
+    var h = state.service && state.service.horas;
+    return h && h.length ? h : [9, 13, 15];
+  }
+  function horaTexto(h) {
+    var hh = h % 12 || 12;
+    return hh + ':00 ' + (h < 12 ? 'a.m.' : 'p.m.');
+  }
+  function duracionEstimada() {
+    return (state.tier && (Number(state.tier.durMax) || Number(state.tier.durMin))) || 2;
+  }
+  function horaPasada(iso, hora) {
+    var ahora = ahoraCR();
+    return iso < ahora.iso || (iso === ahora.iso && ahora.hora >= hora);
+  }
+  function franjasDeTramo(ini, fin) {
+    var f = [];
+    if (ini < CORTE_FRANJA && fin > 0) f.push('manana');
+    if (fin > CORTE_FRANJA) f.push('tarde');
+    return f.length ? f : ['manana'];
+  }
+  // Misma lógica que el servidor (Codigo.gs → evaluarHora_): revisa todas las franjas que ocupa el servicio
+  // (uno de más de 4 h ocupa mañana y tarde), espacios bloqueados, disponibilidad manual y la matriz.
+  function evaluarHora(iso, hora) {
+    if (horaPasada(iso, hora)) return { accion: 'bloquear', mensaje: 'Ese horario de hoy ya pasó.' };
+    var modos = dispo.modos[iso] || {}, cierres = dispo.cerrados[iso] || {};
+    var franjas = franjasDeTramo(hora, hora + duracionEstimada());
+    for (var i = 0; i < franjas.length; i++) {
+      var fr = franjas[i], cierre = cierres[fr], modo = modos[fr];
+      if (cierre === 'bloqueo' || modo === 'bloquear') return { accion: 'bloquear', mensaje: 'Ese horario no está disponible ese día.' };
+      if (cierre && modo !== 'abrir') return { accion: 'bloquear', mensaje: 'Ese horario ya está completo.' };
+    }
+    return evaluarDia(iso, hora >= CORTE_FRANJA ? 'Tarde' : 'Mañana', true);
   }
 
   // Devuelve null si el día se puede elegir, o el motivo del bloqueo.
   function motivoDiaBloqueado(iso) {
     var d = new Date(iso + 'T12:00:00');
-    if (franjaPasada(iso, 'tarde')) return 'pasado'; // días anteriores, y hoy cuando ya cerró el salón (hora de Costa Rica)
+    var horas = horasServicio();
+    // Días anteriores, y hoy cuando ya pasó la última hora de inicio del servicio (hora de Costa Rica).
+    if (horaPasada(iso, Math.max.apply(null, horas))) return 'pasado';
     if (d.getDay() === 0 || d.getDay() === 1) return 'cerrado';
     if (d > FECHA_MAX) return 'lejos';
-    if (evaluarDia(iso, 'Mañana').accion === 'bloquear' && evaluarDia(iso, 'Tarde').accion === 'bloquear') return 'lleno';
+    if (horas.every(function (h) { return evaluarHora(iso, h).accion === 'bloquear'; })) return 'lleno';
     return null;
   }
 
@@ -444,39 +496,47 @@
         els.inpFecha.dispatchEvent(new Event('change'));
       }
       renderCalendario();
-      actualizarFranjas();
+      renderHoras();
     });
   }
 
-  function actualizarFranjas() {
-    els.franjaButtons.forEach(function (btn) {
-      var franja = btn.getAttribute('data-franja');
-      var llena = !!state.fecha && evaluarDia(state.fecha, franja).accion === 'bloquear';
-      var pasada = llena && franjaPasada(state.fecha, franja === 'Tarde' ? 'tarde' : 'manana');
-      btn.disabled = llena;
-      btn.classList.toggle('llena', llena);
-      btn.textContent = franja + (pasada ? ' · ya pasó' : (llena ? ' · no disponible' : ''));
+  // Botones de hora de inicio (9:00 a.m., 1:00 p.m., 3:00 p.m. según el servicio).
+  function renderHoras() {
+    var html = '';
+    horasServicio().forEach(function (h) {
+      var ev = state.fecha ? evaluarHora(state.fecha, h) : null;
+      var llena = !!ev && ev.accion === 'bloquear';
+      var pasada = llena && horaPasada(state.fecha, h);
+      html += '<button type="button" class="franja-option hora-option' + (llena ? ' llena' : '') +
+        (state.hora === h ? ' selected' : '') + '" data-hora="' + h + '"' + (llena ? ' disabled' : '') + '>' +
+        horaTexto(h) + (pasada ? ' · ya pasó' : (llena ? ' · no disponible' : '')) + '</button>';
     });
+    els.horaGrid.innerHTML = html;
+    var largo = duracionEstimada() > 4;
+    els.horaNota.textContent = !state.fecha
+      ? 'Elige primero la fecha. Las horas disponibles dependen del servicio.'
+      : (largo ? 'Este servicio dura más de 4 horas: reserva el espacio que ocupa durante el día.' : 'Elige la hora de inicio de tu cita.');
   }
 
   function resetFranjaSelection() {
     state.franja = null;
-    els.franjaButtons.forEach(function (b) { b.classList.remove('selected'); });
+    state.hora = null;
     els.availabilityResult.hidden = true;
     els.toStep4.disabled = true;
   }
 
   function showFranjaMessage() {
-    if (!state.fecha || !state.franja) return;
+    if (!state.fecha || state.hora == null) return;
     els.availabilityResult.hidden = false;
     els.availabilityResult.className = 'availability-result ok';
     els.availabilityResult.textContent =
-      '¡Excelente elección! Solicitaremos tu espacio para el ' + fechaLegible(state.fecha).toLowerCase() +
-      ' en la ' + state.franja.toLowerCase() + '. Nuestro equipo te confirma la hora exacta.';
-    var ev = evaluarDia(state.fecha, state.franja);
+      '¡Excelente elección! Tu cita queda para el ' + fechaLegible(state.fecha).toLowerCase() +
+      ' a las ' + state.franja;
+    var ev = evaluarHora(state.fecha, state.hora);
     if (ev.accion === 'aprobacion') {
       els.availabilityResult.className = 'availability-result review';
-      els.availabilityResult.textContent += ' ' + ev.mensaje;
+      els.availabilityResult.textContent = 'Solicitaremos tu espacio para el ' + fechaLegible(state.fecha).toLowerCase() +
+        ' a las ' + state.franja + ' ' + ev.mensaje;
     }
     els.toStep4.disabled = false;
   }
@@ -484,41 +544,37 @@
   els.inpFecha.addEventListener('change', function () {
     resetFranjaSelection();
     state.fecha = null;
-    if (!els.inpFecha.value) { actualizarFranjas(); return; }
+    if (!els.inpFecha.value) { renderHoras(); return; }
     var motivo = motivoDiaBloqueado(els.inpFecha.value);
     if (motivo) {
       els.availabilityResult.hidden = false;
       els.availabilityResult.className = 'availability-result full';
       els.availabilityResult.textContent = {
         lleno: 'Ese día ya está lleno. Elige otra fecha, por favor.',
-        pasado: 'Ese día ya pasó o ya cerramos por hoy. Elige otra fecha, por favor.',
+        pasado: 'Ese día ya pasó o ya no quedan horas hoy. Elige otra fecha, por favor.',
         lejos: 'Esa fecha todavía no está disponible para reservar en línea.'
       }[motivo] || 'Domingos y lunes descansamos. Elige un día de martes a sábado.';
-      actualizarFranjas();
+      renderHoras();
       return;
     }
     state.fecha = els.inpFecha.value;
-    actualizarFranjas();
-    // Servicios de más de 4 h ocupan mañana y tarde: se preselecciona la mañana.
-    if (esServicioLargo() && !els.franjaButtons[0].disabled) {
-      els.franjaButtons[0].click();
-    }
+    renderHoras();
   });
 
-  els.franjaButtons.forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      if (!state.fecha) {
-        els.availabilityResult.hidden = false;
-        els.availabilityResult.className = 'availability-result review';
-        els.availabilityResult.textContent = 'Primero elige la fecha de tu cita.';
-        return;
-      }
-      if (btn.disabled) return;
-      els.franjaButtons.forEach(function (b) { b.classList.remove('selected'); });
-      btn.classList.add('selected');
-      state.franja = btn.getAttribute('data-franja');
-      showFranjaMessage();
-    });
+  els.horaGrid.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('.hora-option');
+    if (!btn) return;
+    if (!state.fecha) {
+      els.availabilityResult.hidden = false;
+      els.availabilityResult.className = 'availability-result review';
+      els.availabilityResult.textContent = 'Primero elige la fecha de tu cita.';
+      return;
+    }
+    if (btn.disabled) return;
+    state.hora = Number(btn.getAttribute('data-hora'));
+    state.franja = horaTexto(state.hora);
+    renderHoras();
+    showFranjaMessage();
   });
 
   els.toStep4.addEventListener('click', function () {
@@ -538,11 +594,15 @@
     var correo = els.inpCorreo.value.trim();
     var errores = [];
 
-    [els.inpNombre, els.inpCelular, els.inpCorreo].forEach(function (i) { i.classList.remove('invalid'); });
+    var tipo = els.selTipoCliente.value;
+    [els.inpNombre, els.inpCelular, els.inpCorreo, els.selTipoCliente].forEach(function (i) { i.classList.remove('invalid'); });
+    els.fotosZona.classList.remove('invalid');
 
     if (nombre.length < 3) { errores.push('tu nombre completo'); els.inpNombre.classList.add('invalid'); }
     if (digitos.length < 8 || digitos.length > 15) { errores.push('un número de celular válido'); els.inpCelular.classList.add('invalid'); }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(correo)) { errores.push('un correo válido'); els.inpCorreo.classList.add('invalid'); }
+    if (!tipo) { errores.push('si eres cliente nueva o regular'); els.selTipoCliente.classList.add('invalid'); }
+    else if (tipo === 'nuevo' && !state.fotos.length) { errores.push('al menos una foto actual de tu cabello'); els.fotosZona.classList.add('invalid'); }
 
     if (errores.length) {
       els.datosError.hidden = false;
@@ -557,8 +617,55 @@
       celular: celularCompleto,
       correo: correo,
       notas: els.inpNotas.value.trim(),
+      tipo: tipo,
+      expectativas: els.inpExpectativas.value.trim(),
+      whatsapp: els.chkWhatsapp.checked,
     };
   }
+
+  // Tipo de cliente: nueva = foto obligatoria; regular = foto opcional.
+  var MAX_FOTOS = 4;
+  els.selTipoCliente.addEventListener('change', function () {
+    var tipo = els.selTipoCliente.value;
+    els.fotosCabello.hidden = !tipo;
+    els.fotosRegular.hidden = tipo !== 'regular';
+    els.fotosRequisito.innerHTML = tipo === 'nuevo'
+      ? 'Fotos de tu cabello <span class="req">(obligatorio)</span>'
+      : 'Fotos de tu cabello <span class="optional">OPCIONAL</span>';
+  });
+
+  function renderFotos() {
+    els.fotosLista.innerHTML = '';
+    state.fotos.forEach(function (f, i) {
+      var item = document.createElement('div');
+      item.className = 'foto-item';
+      var img = document.createElement('img');
+      img.src = URL.createObjectURL(f);
+      img.alt = 'Foto ' + (i + 1) + ' de tu cabello';
+      var quitar = document.createElement('button');
+      quitar.type = 'button';
+      quitar.className = 'foto-quitar';
+      quitar.setAttribute('aria-label', 'Quitar foto');
+      quitar.textContent = '×';
+      quitar.addEventListener('click', function () { state.fotos.splice(i, 1); renderFotos(); });
+      item.appendChild(img);
+      item.appendChild(quitar);
+      els.fotosLista.appendChild(item);
+    });
+    els.fotosZona.hidden = state.fotos.length >= MAX_FOTOS;
+  }
+
+  els.inpFotos.addEventListener('change', function () {
+    var archivos = Array.prototype.slice.call(els.inpFotos.files || []).filter(function (f) {
+      return /^image\/(jpeg|png|webp)$/.test(f.type);
+    }).slice(0, MAX_FOTOS - state.fotos.length);
+    els.inpFotos.value = '';
+    Promise.all(archivos.map(function (f) { return optimizarImagen(f, true); })).then(function (listas) {
+      state.fotos = state.fotos.concat(listas).slice(0, MAX_FOTOS);
+      els.fotosZona.classList.remove('invalid');
+      renderFotos();
+    });
+  });
 
   els.toStep5.addEventListener('click', function () {
     var cliente = validarDatos();
@@ -585,11 +692,14 @@
       ['Precio estimado', priceRangeLabel(tier)],
       ['Duración estimada', durationLabel(tier) || 'Por confirmar'],
       ['Fecha', fechaLegible(state.fecha)],
-      ['Momento del día', state.franja],
+      ['Hora de inicio', state.franja],
       ['Nombre', c.nombre],
       ['Celular', c.celular],
       ['Correo', c.correo],
     ];
+    rows.push(['Tipo de cliente', c.tipo === 'nuevo' ? 'Cliente nueva' : 'Cliente regular']);
+    if (state.fotos.length) rows.push(['Fotos del cabello', state.fotos.length + (state.fotos.length === 1 ? ' foto' : ' fotos')]);
+    if (c.expectativas) rows.push(['Resultado esperado', c.expectativas]);
     if (c.notas) rows.push(['Comentarios', c.notas]);
 
     var html = '<dl>';
@@ -608,6 +718,9 @@
     if (deposito.requerido) {
       els.pagoMonto.textContent = money(deposito.monto);
       els.pagoConcepto.textContent = conceptoPago();
+      els.btnLinkPago.href = 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(
+        '¡Hola Amarë! Quiero solicitar el link de pago de reserva por ' + money(deposito.monto) + ' para mi cita de ' +
+        s.servicio + ' el ' + fechaLegible(state.fecha).toLowerCase() + ' a las ' + state.franja + ' Mi nombre es ' + c.nombre + '.');
     }
     actualizarBoton();
   }
@@ -658,18 +771,18 @@
   }
 
   // Fotos grandes del celular se reducen a 1600 px para que el correo llegue rápido.
-  function optimizarImagen(file) {
+  function optimizarImagen(file, siempre) {
     return new Promise(function (resolve) {
-      if (file.type === 'application/pdf' || file.size < 1200 * 1024 || !window.createImageBitmap) return resolve(file);
+      if (file.type === 'application/pdf' || (!siempre && file.size < 1200 * 1024) || !window.createImageBitmap) return resolve(file);
       createImageBitmap(file).then(function (bmp) {
-        var escala = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+        var escala = Math.min(1, (siempre ? 1280 : 1600) / Math.max(bmp.width, bmp.height));
         var canvas = document.createElement('canvas');
         canvas.width = Math.round(bmp.width * escala);
         canvas.height = Math.round(bmp.height * escala);
         canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
         canvas.toBlob(function (blob) {
           if (!blob) return resolve(file);
-          var nombre = file.name.replace(/\.(png|jpe?g)$/i, '') + '.jpg';
+          var nombre = file.name.replace(/\.(png|jpe?g|webp)$/i, '') + '.jpg';
           resolve(new File([blob], nombre, { type: 'image/jpeg' }));
         }, 'image/jpeg', 0.85);
       }).catch(function () { resolve(file); });
@@ -731,12 +844,12 @@
     var c = state.cliente;
     var deposito = currentDeposito();
     var lines = [
-      '¡Hola Amarë! Quiero reservar una cita:',
+      '¡Hola Amarë! Acabo de reservar una cita:',
       '• Nombre: ' + c.nombre,
       '• Servicio: ' + s.servicio + ' (' + s.categoria + ')',
       '• Largo: ' + state.lengthLabel + ' — ' + priceRangeLabel(state.tier),
       '• Fecha: ' + fechaLegible(state.fecha) + ' — ' + state.franja,
-      '• Depósito: ' + (deposito.requerido ? money(deposito.monto) + ' (ya adjunté el comprobante en la web)' : 'no requiere'),
+      '• Depósito: ' + (deposito.requerido ? money(deposito.monto) + ' (adjunté el comprobante en la web)' : 'no requiere'),
     ];
     if (c.notas) lines.push('• Comentarios: ' + c.notas);
     return 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(lines.join('\n'));
@@ -757,7 +870,7 @@
       'Precio estimado': priceRangeLabel(tier),
       'Duración estimada': durationLabel(tier) || 'Por confirmar',
       'Fecha': fechaLegible(state.fecha) + ' (' + state.fecha + ')',
-      'Momento del día': state.franja,
+      'Hora de inicio': state.franja,
       'Depósito': deposito.requerido ? money(deposito.monto) + ' (se descuenta del total)' : 'No requiere',
       'Comentarios': c.notas || '—',
     };
@@ -784,14 +897,14 @@
         duracion_min_h: tier.durMin,
         duracion_max_h: tier.durMax,
       },
-      cita: { fecha: state.fecha, franja: state.franja, horario_sugerido: s.horario || '' },
+      cita: { fecha: state.fecha, hora: state.franja, horario_sugerido: s.horario || '' },
       deposito: {
         requerido: deposito.requerido,
         monto: deposito.monto,
         comprobante_adjunto: !!state.comprobante,
         descripcion_sinpe: deposito.requerido ? conceptoPago() : '',
       },
-      estado: deposito.requerido ? 'pendiente_validacion_pago' : 'pendiente_confirmacion',
+      estado: 'reservada',
       comentarios: c.notas || '',
     };
   }
@@ -910,10 +1023,14 @@
   var CLAVE_RESERVA = 'amare_reserva_enviada';
 
   function mostrarGracias(datos) {
-    els.doneTitle.textContent = '¡Gracias, ' + datos.nombre + '! Recibimos tu reserva';
-    els.doneTexto.textContent = datos.conDeposito
-      ? 'Recibimos tu comprobante y te enviamos el resumen a tu correo. En cuanto validemos el depósito te confirmamos la hora exacta por WhatsApp.'
-      : 'Te enviamos el resumen a tu correo. En breve te escribimos por WhatsApp para confirmar la hora exacta.';
+    if (datos.aprobacion) {
+      els.doneTitle.textContent = '¡Gracias, ' + datos.nombre + '! Recibimos tu solicitud';
+      els.doneTexto.textContent = 'Este servicio requiere validación del equipo AMARË antes de confirmar la reserva. ' +
+        'Te avisamos por WhatsApp y correo en cuanto quede confirmada.';
+    } else {
+      els.doneTitle.textContent = '¡Gracias, ' + datos.nombre + '! Tu cita está reservada';
+      els.doneTexto.textContent = 'Te esperamos el ' + datos.cuando + '. Te enviamos la confirmación por WhatsApp y a tu correo.';
+    }
     els.doneWhatsapp.href = datos.wa;
     goToStep(6);
     if (window.amareTrack) window.amareTrack('reserva_confirmada', {
@@ -944,7 +1061,7 @@
         _captcha: 'false',
         _honey: '',
         _autoresponse: 'Hola ' + nombre + ', ¡muchas gracias por su pedido! En Amarë Beauty Center estamos muy contentos de atenderle. ' +
-          'Este es el resumen de su pedido; en breve le escribimos por WhatsApp para confirmar la hora de su cita.',
+          'Este es el resumen de su reserva; le enviaremos la confirmación por WhatsApp.',
         // FormSubmit envía la respuesta automática al campo llamado "email".
         email: c.correo,
       },
@@ -972,12 +1089,12 @@
       precio: f['Precio estimado'],
       duracion: f['Duración estimada'],
       fecha: fechaLegible(state.fecha),
-      franja: f['Momento del día'],
+      franja: f['Hora de inicio'],
       deposito: f['Depósito'],
       comentarios: f['Comentarios'],
       nota_pago: currentDeposito().requerido
-        ? 'Recibimos su comprobante del depósito de ' + money(currentDeposito().monto) + '. Nuestro equipo lo validará y le confirmará la hora exacta por WhatsApp. Si el monto no coincide, le avisaremos el motivo.'
-        : 'Este servicio no requiere depósito. En breve le escribimos por WhatsApp para confirmar la hora exacta.',
+        ? 'Recibimos su comprobante del depósito de ' + money(currentDeposito().monto) + '. Su cita queda reservada; si hay algún problema con el depósito le escribimos por WhatsApp.'
+        : 'Este servicio no requiere depósito. Su cita queda reservada.',
     };
   }
 
@@ -1024,19 +1141,28 @@
       servicio: state.service.servicio,
       categoria: state.service.categoria,
       deposito: deposito.monto,
+      cuando: fechaLegible(state.fecha).toLowerCase() + ' a las ' + state.franja,
     };
     var negocio = payloadNegocio();
     var cliente = payloadCliente();
 
     mostrarErrorPago('');
     els.btnConfirmar.classList.add('is-loading');
-    els.btnConfirmar.textContent = state.comprobante ? 'Enviando comprobante…' : 'Enviando…';
+    els.btnConfirmar.textContent = (state.comprobante || state.fotos.length) ? 'Enviando archivos…' : 'Enviando…';
 
     // Servidor de reservas (Apps Script): guarda la reserva, el comprobante y envía los correos.
     if (API_URL) {
       enviarAlServidor(deposito)
         .then(function (resp) {
-          if (resp.ok) { mostrarGracias(datosGracias); return; }
+          if (resp.ok) { datosGracias.aprobacion = !!resp.requiere_aprobacion; mostrarGracias(datosGracias); return; }
+          if (resp.error === 'falta_foto') {
+            els.btnConfirmar.classList.remove('is-loading');
+            els.btnConfirmar.textContent = 'Confirmar reserva';
+            goToStep(4);
+            els.datosError.hidden = false;
+            els.datosError.textContent = 'Por favor adjunta al menos una foto actual de tu cabello.';
+            return;
+          }
           if (resp.error === 'franja_llena') {
             els.btnConfirmar.classList.remove('is-loading');
             els.btnConfirmar.textContent = 'Confirmar reserva';
@@ -1044,7 +1170,7 @@
             prepararPaso3();
             els.availabilityResult.hidden = false;
             els.availabilityResult.className = 'availability-result full';
-            els.availabilityResult.textContent = (resp.mensaje ? resp.mensaje + ' ' : 'Justo se llenó ese espacio. ') + 'Elige otra fecha o franja, por favor.';
+            els.availabilityResult.textContent = (resp.mensaje ? resp.mensaje + ' ' : 'Justo se llenó ese espacio. ') + 'Elige otra fecha u hora, por favor.';
             return;
           }
           throw new Error(resp.error || 'respuesta inválida');
@@ -1118,14 +1244,21 @@
       nombre: c.nombre, celular: c.celular, correo: c.correo, comentarios: c.notas || '',
       categoria: s.categoria, servicio: s.servicio, codigo: s.codigo || '', largo: state.lengthLabel,
       precio_min: tier.min, precio_max: tier.max, dur_min_h: tier.durMin, dur_max_h: tier.durMax,
-      fecha: state.fecha, franja: state.franja, horario_sugerido: s.horario || '',
+      fecha: state.fecha, franja: state.hora >= CORTE_FRANJA ? 'Tarde' : 'Mañana', hora: state.hora + ':00',
+      horario_sugerido: s.horario || '',
+      tipo_cliente: c.tipo, expectativas: c.expectativas || '', whatsapp_ok: !!c.whatsapp,
       deposito: deposito.requerido ? deposito.monto : 0,
       descripcion_sinpe: deposito.requerido ? conceptoPago() : ''
     };
     var archivo = state.comprobante ? leerBase64(state.comprobante) : Promise.resolve(null);
-    return archivo.then(function (b64) {
+    var fotos = Promise.all(state.fotos.map(function (f) {
+      return leerBase64(f).then(function (b64) { return { base64: b64, tipo: f.type, nombre: f.name }; });
+    }));
+    return Promise.all([archivo, fotos]).then(function (res) {
+      var b64 = res[0];
       var cuerpo = { reserva: reserva };
       if (b64) cuerpo.comprobante = { base64: b64, tipo: state.comprobante.type, nombre: state.comprobante.name };
+      if (res[1].length) cuerpo.fotos = res[1];
       // text/plain evita la verificación CORS previa, que Apps Script no responde.
       return fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(cuerpo) });
     }).then(function (r) { return r.json(); });

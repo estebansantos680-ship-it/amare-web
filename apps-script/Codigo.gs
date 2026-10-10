@@ -3,18 +3,21 @@
  * Corre con la cuenta facturas@amarecr.com.
  *
  * Qué hace:
- *  - Recibe cada reserva del sitio (doPost): la guarda en la hoja "Reservas",
- *    guarda el comprobante en Drive, avisa a facturas@ y envía al cliente el
- *    correo "Solicitud recibida" (EmailJS).
+ *  - Recibe cada reserva del sitio (doPost): la guarda en la hoja "Reservas", guarda el comprobante y las
+ *    fotos del cabello en Drive y avisa al salón. Si la matriz dice "Permitir", la cita se agenda sola en
+ *    Google Calendar a la hora elegida (9:00, 13:00 o 15:00) con la duración estimada y la clienta recibe la
+ *    confirmación (correo + WhatsApp). Si dice "Requiere aprobación", queda en esa pestaña del panel.
  *  - Publica la ocupación de cada día (doGet ?accion=disponibilidad) y la matriz de
  *    reglas (pestaña "Reglas" de la hoja) para que la reserva en línea cierre lo lleno.
  *  - Sirve el panel de administración (doGet sin parámetros), solo para
  *    facturas@amarecr.com con sesión de Google.
- *  - Envía el recordatorio 24 h antes de cada cita confirmada (disparador horario).
+ *  - Envía recordatorios 3 días y 1 día antes de cada cita confirmada (disparador cada 15 min).
  *
- * Ciclo de estados:
- *   pago_por_validar → pago_aprobado → cita_agendada → cita_confirmada → completada / no_asistio
- *                    ↘ pago_rechazado   ↘ dia_saturado → (nueva fecha) ↗
+ * Ciclo de estados (desde 10-oct-2026 ya no hay validación de pago antes de confirmar):
+ *   web "Permitir"            → cita_confirmada (revisada vacía = "Por agendar") → revisada → completada / no_asistio
+ *   web "Requiere aprobación" → requiere_aprobacion → (aprobar) cita_confirmada / dia_saturado / cancelada
+ *   cita manual del panel     → cita_confirmada (revisada)
+ *   Estados antiguos (pago_por_validar, pago_aprobado, cita_agendada) se siguen mostrando y se pueden agendar.
  *   Cualquiera puede pasar a cancelada o eliminada (eliminada solo se oculta; la fila queda).
  *
  * Instalación: ver apps-script/INSTALAR.md
@@ -22,7 +25,8 @@
 
 // ------------------------------------------------------------------ Config
 var CONFIG = {
-  ADMIN_EMAIL: 'facturas@amarecr.com',
+  ADMIN_EMAIL: 'facturas@amarecr.com',   // cuenta dueña del sistema (inicio de sesión del panel)
+  CORREO_CITAS: 'citas@amarecr.com',     // correo visible para clientas (alias de la cuenta del salón)
   // Publicación "Panel admin" (acceso: solo facturas@). La otra publicación es la API pública.
   PANEL_URL: 'https://script.google.com/a/macros/amarecr.com/s/AKfycbyNGq-K0H7scCaGoJwNtsLFgL7YcKL2q4UHhXm9V01VIWo0rPPoyQJQKNrd1sJ2vLVM/exec',
   ZONA: 'America/Costa_Rica',
@@ -37,8 +41,10 @@ var CONFIG = {
   HORA_TARDE: [13, 18],        // la tarde de 13:00 a 18:00
   HORAS_SERVICIO_LARGO: 4,     // > 4 h ocupa mañana y tarde
   DIAS_DISPONIBILIDAD: 120,
-  DIRECCION: 'Calle 42, San José, Costa Rica',
-  SENALES: 'Casa color blanca a mano izquierda, contiguo a Minisuper AMD, antes del reductor de velocidad.',
+  DIRECCION: 'Calle 42, San José, Santa Ana, Costa Rica',
+  SENALES: 'LOCAL COLOR BLANCO a mano izquierda, contiguo a Minisuper AMD, antes del reductor de velocidad.',
+  HORAS_INICIO: [9, 13, 15],   // horas de inicio que puede ofrecer la web (cada servicio dice cuáles, ver js/services-data.js)
+  MAX_FOTOS: 4,                // fotos del cabello por reserva
   WAZE: 'https://waze.com/ul?ll=9.9252005,-84.1987&navigate=yes',
   MAPS: 'https://maps.google.com/maps/search/Amare%20Beauty%20Center/@9.925200462341309,-84.19869995117188,17z',
   WHATSAPP: 'https://wa.me/50688073849',
@@ -55,7 +61,22 @@ var CONFIG = {
       pagoRechazado: 'template_irdtu34',  // 3. Pago rechazado
       citaConfirmada: 'template_idaj1xg', // 4. Cita confirmada
       diaSaturado: 'template_17lidvh',    // 5. Día saturado
-      recordatorio: 'template_36l8drt'    // 6. Recordatorio 24 h
+      recordatorio: 'template_36l8drt',   // 6. Recordatorio 24 h
+      recordatorio3d: ''                  // 7. Recordatorio 3 días (crear en EmailJS; vacío = solo WhatsApp)
+    }
+  },
+  // WhatsApp Business Platform (Cloud API de Meta). Token e ID del número van en Propiedades del script:
+  // WHATSAPP_TOKEN y WHATSAPP_PHONE_ID. Sin ellos no se envía nada (y el panel ofrece el botón manual).
+  WHATSAPP_API: {
+    version: 'v21.0',
+    idioma: 'es',
+    // plantilla → orden de las variables {{1}}, {{2}}… (deben coincidir con las plantillas aprobadas en Meta)
+    plantillas: {
+      reserva_confirmada: ['nombre', 'servicio', 'fecha', 'hora', 'direccion'],
+      reserva_en_revision: ['nombre', 'servicio', 'fecha', 'hora'],
+      cita_actualizada: ['nombre', 'servicio', 'fecha', 'hora'],
+      recordatorio_3_dias: ['nombre', 'servicio', 'fecha', 'hora', 'direccion'],
+      recordatorio_1_dia: ['nombre', 'servicio', 'fecha', 'hora', 'direccion']
     }
   }
 };
@@ -67,6 +88,7 @@ var ESTADOS = {
   DIA_SATURADO: 'dia_saturado',
   CITA_AGENDADA: 'cita_agendada',     // ya está en Google Calendar, falta confirmarle a la clienta
   CITA_CONFIRMADA: 'cita_confirmada',
+  REQUIERE_APROBACION: 'requiere_aprobacion',  // la matriz pidió revisión del salón antes de agendar
   CANCELADA: 'cancelada',
   COMPLETADA: 'completada',           // la cita ya pasó (automático al terminar o manual)
   NO_ASISTIO: 'no_asistio',
@@ -74,7 +96,7 @@ var ESTADOS = {
 };
 
 /** Reservas que ocupan espacio en el día (desde que entran, aunque el pago no esté validado). */
-var ESTADOS_ACTIVOS = ['pago_por_validar', 'pago_aprobado', 'cita_agendada', 'cita_confirmada'];
+var ESTADOS_ACTIVOS = ['pago_por_validar', 'pago_aprobado', 'cita_agendada', 'cita_confirmada', 'requiere_aprobacion'];
 
 /**
  * Matriz inicial de reglas (AMARE_Blueprint_AppCitas.xlsx → Reglas_Operativas).
@@ -196,7 +218,8 @@ var COLUMNAS = [
   'precio_min', 'precio_max', 'dur_min_h', 'dur_max_h', 'fecha_solicitada', 'franja', 'horario_sugerido',
   'deposito', 'descripcion_sinpe', 'comentarios', 'comprobante_url', 'comprobante_id',
   'fecha_cita', 'hora_inicio', 'hora_fin', 'evento_id', 'motivo', 'recordatorio_enviado', 'actualizado', 'historial',
-  'requiere_aprobacion'
+  'requiere_aprobacion',
+  'hora_solicitada', 'tipo_cliente', 'expectativas', 'fotos_ids', 'revisada', 'origen', 'recordatorio_3d', 'whatsapp_ok'
 ];
 
 // ------------------------------------------------------------------ Instalación (ejecutar una vez)
@@ -235,6 +258,7 @@ function obtenerHoja_() {
     hoja.setFrozenRows(1);
   } else if (hoja.getLastColumn() < COLUMNAS.length) {
     // Columnas nuevas (p. ej. requiere_aprobacion): se agregan al encabezado sin tocar los datos.
+    if (hoja.getMaxColumns() < COLUMNAS.length) hoja.insertColumnsAfter(hoja.getMaxColumns(), COLUMNAS.length - hoja.getMaxColumns());
     hoja.getRange(1, 1, 1, COLUMNAS.length).setValues([COLUMNAS]).setFontWeight('bold');
   }
   return hoja;
@@ -295,51 +319,59 @@ function doPost(e) {
     var r = validarReserva_(datos.reserva || {});
     if (r.error) return json_({ ok: false, error: r.error });
 
-    r.estado = ESTADOS.PAGO_POR_VALIDAR;
-    var archivo = null;
+    // Comprobante (sigue siendo obligatorio si hay depósito, pero ya no se valida antes de confirmar).
+    var archivos = [];
     if (datos.comprobante && datos.comprobante.base64) {
-      // Fuera del candado: subir a Drive es lo más lento y no debe hacer esperar a otras reservas.
-      archivo = guardarComprobante_(r, datos.comprobante);
+      var archivo = guardarComprobante_(r, datos.comprobante);
+      archivos.push(archivo);
       r.comprobante_url = archivo.getUrl();
       r.comprobante_id = archivo.getId();
     } else if (Number(r.deposito) > 0) {
       return json_({ ok: false, error: 'falta_comprobante' });
-    } else {
-      r.estado = ESTADOS.PAGO_APROBADO; // sin depósito: pasa directo a agendar
     }
+    // Fotos del cabello: obligatorias para clientas nuevas.
+    var fotos = (datos.fotos || []).filter(function (x) { return x && x.base64; }).slice(0, CONFIG.MAX_FOTOS);
+    if (r.tipo_cliente === 'nuevo' && !fotos.length) {
+      archivos.forEach(function (a) { a.setTrashed(true); });
+      return json_({ ok: false, error: 'falta_foto' });
+    }
+    var fotosIds = fotos.map(function (x, i) { var a = guardarFotoCabello_(r, x, i + 1); archivos.push(a); return a.getId(); });
+    r.fotos_ids = fotosIds.join(',');
 
     // Revisar cupo y guardar dentro del candado: si llegan varias a la vez, se atienden una por una
     // y nunca se vende dos veces el último espacio.
     var lock = LockService.getScriptLock();
     lock.waitLock(30000);
+    var decision;
     try {
       var todas = leerReservas_(), aj = ajustes_();
-      var f = r.fecha_solicitada, modoFranja = (modosDias_()[f] || {})[franjaClave_(r.franja)];
-      var cierre = (cerradosPorFranja_(ocupacion_(todas), aj)[f] || {})[franjaClave_(r.franja)];
-      var decision = franjaPasada_(f, franjaClave_(r.franja))
-        ? { accion: 'bloquear', mensaje: 'Ese horario de hoy ya pasó.' }
-        : evaluarDia_(resumenDias_(todas)[f], r.categoria, r.franja, obtenerReglas_(), modoFranja, cierre);
+      decision = evaluarHora_(todas, aj, r.fecha_solicitada, horaNumero_(r.hora_solicitada), duracionEstimada_(r), r.categoria);
       if (decision.accion === 'bloquear') {
-        if (archivo) archivo.setTrashed(true);
+        archivos.forEach(function (a) { a.setTrashed(true); });
         return json_({ ok: false, error: 'franja_llena', mensaje: decision.mensaje });
       }
       r.requiere_aprobacion = decision.accion === 'aprobacion' ? 'sí' : '';
+      r.estado = r.requiere_aprobacion ? ESTADOS.REQUIERE_APROBACION : ESTADOS.CITA_CONFIRMADA;
+      r.origen = 'web';
       r.id = 'AM-' + Utilities.formatDate(new Date(), CONFIG.ZONA, 'yyMMdd-HHmmss') + '-' + Math.floor(Math.random() * 900 + 100);
       r.creado = new Date();
-      r.historial = fechaTexto_(new Date()) + ' · reserva recibida desde la web';
+      r.historial = fechaTexto_(new Date()) + ' · reserva recibida desde la web' + (r.requiere_aprobacion ? ' (requiere aprobación)' : '');
       guardarFila_(r);
       SpreadsheetApp.flush();
     } finally {
       lock.releaseLock();
     }
 
+    // Fuera del candado: agendar en Calendar (la reserva ya ocupa su espacio en la hoja mientras tanto).
+    if (r.estado === ESTADOS.CITA_CONFIRMADA) {
+      r = buscarReserva_(r.id);
+      ponerEnCalendario_(r, r.fecha_solicitada, r.hora_solicitada, sumarHoras_(r.hora_solicitada, duracionEstimada_(r)));
+      actualizarReserva_(r, {}, 'agendada automáticamente en Google Calendar (duración estimada, por revisar)');
+      avisarClienta_(r, 'confirmada');
+    } else {
+      avisarClienta_(r, 'revision');
+    }
     avisarAdmin_(r);
-    enviarCorreo_('solicitud', r, {
-      nota_pago: (Number(r.deposito) > 0
-        ? 'Recibimos su comprobante del depósito de ' + colones_(r.deposito) + '. Nuestro equipo lo validará y le confirmará la hora exacta de su cita.'
-        : 'Este servicio no requiere depósito. En breve le confirmamos la hora exacta de su cita.') +
-        (r.requiere_aprobacion ? ' ' + MENSAJE_APROBACION : '')
-    });
     return json_({ ok: true, id: r.id, requiere_aprobacion: !!r.requiere_aprobacion });
   } catch (err) {
     console.error(err);
@@ -367,7 +399,14 @@ function validarReserva_(x) {
   r.dur_min_h = Number(x.dur_min_h) || 0;
   r.dur_max_h = Number(x.dur_max_h) || 0;
   r.fecha_solicitada = texto(x.fecha, 10);
-  r.franja = x.franja === 'Tarde' ? 'Tarde' : 'Mañana';
+  // Hora de inicio elegida (9:00, 13:00 o 15:00 según el servicio). La franja se deduce de la hora.
+  var hora = Number(String(x.hora || '').split(':')[0]);
+  if (CONFIG.HORAS_INICIO.indexOf(hora) < 0) return { error: 'hora_invalida' };
+  r.hora_solicitada = (hora < 10 ? '0' : '') + hora + ':00';
+  r.franja = hora < CONFIG.CORTE_FRANJA ? 'Mañana' : 'Tarde';
+  r.tipo_cliente = x.tipo_cliente === 'nuevo' ? 'nuevo' : (x.tipo_cliente === 'regular' ? 'regular' : '');
+  r.expectativas = texto(x.expectativas, 1000);
+  r.whatsapp_ok = x.whatsapp_ok ? 'sí' : '';
   r.horario_sugerido = texto(x.horario_sugerido, 120);
   r.deposito = Number(x.deposito) || 0;
   r.descripcion_sinpe = texto(x.descripcion_sinpe, 120);
@@ -386,6 +425,26 @@ function guardarComprobante_(r, c) {
   var nombre = r.fecha_solicitada + ' · ' + r.nombre + ' · ' + r.servicio + ext;
   var blob = Utilities.newBlob(Utilities.base64Decode(c.base64), tipo, nombre);
   return carpeta.createFile(blob);
+}
+
+/** Foto del cabello (ya llega comprimida desde la página, JPEG/PNG). Carpeta privada "Fotos de cabello". */
+function guardarFotoCabello_(r, f, n) {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('FOTOS_CARPETA_ID');
+  var carpeta;
+  if (id) carpeta = DriveApp.getFolderById(id);
+  else { carpeta = DriveApp.createFolder('Amarë · Fotos de cabello'); props.setProperty('FOTOS_CARPETA_ID', carpeta.getId()); }
+  var tipo = /^image\/(jpeg|png|webp)$/.test(f.tipo) ? f.tipo : 'image/jpeg';
+  var nombre = r.fecha_solicitada + ' · ' + r.nombre + ' · foto ' + n + (tipo === 'image/png' ? '.png' : '.jpg');
+  return carpeta.createFile(Utilities.newBlob(Utilities.base64Decode(f.base64), tipo, nombre));
+}
+
+/** Horas estimadas de la reserva (la mayor del rango; el salón la corrige en el panel). */
+function duracionEstimada_(r) { return Number(r.dur_max_h) || Number(r.dur_min_h) || CONFIG.HORAS_SIN_DURACION; }
+
+function sumarHoras_(hhmm, horas) {
+  var t = Math.min(Math.round(horaNumero_(hhmm) * 60 + horas * 60), 23 * 60 + 59);
+  return ('0' + Math.floor(t / 60)).slice(-2) + ':' + ('0' + (t % 60)).slice(-2);
 }
 
 function valorCelda_(v) {
@@ -516,6 +575,41 @@ function bloqueosCompat_(dias, cerrados, modos, aj) {
 
 function franjaClave_(franja) { return norm_(franja) === 'tarde' ? 'tarde' : 'manana'; }
 
+/** Franjas que toca un tramo [ini, fin) en horas: ['manana'], ['tarde'] o ambas. */
+function franjasDeTramo_(ini, fin) {
+  var f = [];
+  if (ini < CONFIG.CORTE_FRANJA && fin > 0) f.push('manana');
+  if (fin > CONFIG.CORTE_FRANJA) f.push('tarde');
+  return f.length ? f : ['manana'];
+}
+
+/**
+ * ¿Se puede reservar ese día a esa hora (con esa duración)? Misma lógica que js/booking.js (evaluarHora).
+ * Revisa: hora ya pasada, espacio bloqueado, bloqueo/apertura manual, franjas llenas (citas u horas) en TODAS
+ * las franjas que ocupa el servicio, y la matriz de reglas por categoría. → { accion, mensaje }
+ */
+function evaluarHora_(reservas, aj, fecha, hora, dur, categoria) {
+  if (horaPasada_(fecha, hora)) return { accion: 'bloquear', mensaje: 'Ese horario de hoy ya pasó.' };
+  var modos = modosDias_()[fecha] || {}, cierres = cerradosPorFranja_(ocupacion_(reservas), aj)[fecha] || {};
+  var franjas = franjasDeTramo_(hora, hora + dur);
+  for (var i = 0; i < franjas.length; i++) {
+    var fr = franjas[i], cierre = cierres[fr], modo = modos[fr];
+    if (cierre === 'bloqueo') return { accion: 'bloquear', mensaje: 'Ese horario no está disponible ese día.' };
+    if (modo === 'bloquear') return { accion: 'bloquear', mensaje: 'Ese horario no está disponible ese día.' };
+    if (cierre && modo !== 'abrir') return { accion: 'bloquear', mensaje: 'Ese horario ya está completo.' };
+  }
+  var inicial = franjas[0] === 'tarde' || hora >= CONFIG.CORTE_FRANJA ? 'Tarde' : 'Mañana';
+  return evaluarDia_(resumenDias_(reservas)[fecha], categoria, inicial, obtenerReglas_(), modos[franjaClave_(inicial)], '');
+}
+
+/** ¿La hora de inicio de hoy ya pasó? (hora de Costa Rica) */
+function horaPasada_(fecha, hora) {
+  var ahora = new Date();
+  var hoy = Utilities.formatDate(ahora, CONFIG.ZONA, 'yyyy-MM-dd');
+  var h = Number(Utilities.formatDate(ahora, CONFIG.ZONA, 'H')) + Number(Utilities.formatDate(ahora, CONFIG.ZONA, 'm')) / 60;
+  return fecha < hoy || (fecha === hoy && h >= hora);
+}
+
 /** ¿Esa franja ya pasó? (hora de Costa Rica). La mañana termina a las 12:00 y la tarde al cierre del salón. */
 function franjaPasada_(fecha, clave) {
   var ahora = new Date();
@@ -569,22 +663,43 @@ function sumarTramo_(ocup, fecha, ini, fin) {
  * del panel limpian la caché.
  */
 function ocupacionCalendario_() {
-  var cache = CacheService.getScriptCache(), guardado = cache.get('OCUP_CAL');
+  var cache = CacheService.getScriptCache(), guardado = cache.get('OCUP_CAL2');
   if (guardado) return JSON.parse(guardado);
   var hoy = Utilities.formatDate(new Date(), CONFIG.ZONA, 'yyyy-MM-dd');
   var ocup = {}, hora = function (d) { return Number(Utilities.formatDate(d, CONFIG.ZONA, 'H')) + Number(Utilities.formatDate(d, CONFIG.ZONA, 'm')) / 60; };
   CalendarApp.getDefaultCalendar().getEvents(fechaHora_(hoy, '00:00'), fechaHora_(CONFIG.FECHA_MAX, '23:59')).forEach(function (ev) {
-    if (ev.isAllDayEvent()) return;
     var ini = ev.getStartTime(), fin = ev.getEndTime();
     var f = Utilities.formatDate(ini, CONFIG.ZONA, 'yyyy-MM-dd');
+    if (esBloqueo_(ev)) { marcarBloqueo_(ocup, ev, f, hora); return; }  // "Espacio bloqueado" cierra sus franjas
+    if (ev.isAllDayEvent()) return;
     var finH = Utilities.formatDate(fin, CONFIG.ZONA, 'yyyy-MM-dd') > f ? 24 : hora(fin); // si pasa de medianoche, hasta las 24
     sumarTramo_(ocup, f, hora(ini), finH);
   });
-  try { cache.put('OCUP_CAL', JSON.stringify(ocup), 120); } catch (e) { /* muy grande para la caché */ }
+  try { cache.put('OCUP_CAL2', JSON.stringify(ocup), 120); } catch (e) { /* muy grande para la caché */ }
   return ocup;
 }
 
-function limpiarCacheCalendario_() { CacheService.getScriptCache().remove('OCUP_CAL'); }
+var PREFIJO_BLOQUEO = 'Espacio bloqueado';
+function esBloqueo_(ev) { return String(ev.getTitle()).indexOf(PREFIJO_BLOQUEO) === 0; }
+
+/** Un espacio bloqueado (todo el día o por horas) cierra en la web cada franja que toca, en cada día que abarca. */
+function marcarBloqueo_(ocup, ev, f, hora) {
+  var vacio = function () { return { manana: { citas: 0, horas: 0 }, tarde: { citas: 0, horas: 0 } }; };
+  var ini = ev.getStartTime(), fin = ev.getEndTime();
+  var dia = new Date(ini.getTime()), ultimo = Utilities.formatDate(new Date(fin.getTime() - 1), CONFIG.ZONA, 'yyyy-MM-dd');
+  for (var k = 0; k < 400; k++) {
+    var fd = Utilities.formatDate(dia, CONFIG.ZONA, 'yyyy-MM-dd');
+    if (fd > ultimo) break;
+    var d = ocup[fd] = ocup[fd] || vacio();
+    var franjas = ev.isAllDayEvent() || fd !== f || fd !== ultimo
+      ? ['manana', 'tarde']
+      : franjasDeTramo_(hora(ini), Utilities.formatDate(fin, CONFIG.ZONA, 'yyyy-MM-dd') > f ? 24 : hora(fin));
+    franjas.forEach(function (fr) { d[fr].bloqueo = true; });
+    dia = new Date(dia.getTime() + 864e5);
+  }
+}
+
+function limpiarCacheCalendario_() { CacheService.getScriptCache().remove('OCUP_CAL2'); }
 
 /**
  * Ocupación por franja = eventos del calendario + reservas web que aún no tienen hora (se ubican al inicio de la
@@ -594,7 +709,7 @@ function ocupacion_(reservas) {
   var ocup = JSON.parse(JSON.stringify(ocupacionCalendario_()));
   reservas.forEach(function (r) {
     if (!esActiva_(r) || tieneHorario_(r) || !r.fecha_solicitada) return;
-    var ini = r.franja === 'Tarde' ? CONFIG.HORA_TARDE[0] : CONFIG.HORA_MANANA[0];
+    var ini = r.hora_solicitada ? horaNumero_(r.hora_solicitada) : (r.franja === 'Tarde' ? CONFIG.HORA_TARDE[0] : CONFIG.HORA_MANANA[0]);
     var dur = Number(r.dur_max_h) || Number(r.dur_min_h) || CONFIG.HORAS_SIN_DURACION;
     sumarTramo_(ocup, r.fecha_solicitada, ini, Math.min(ini + dur, 24));
   });
@@ -607,7 +722,7 @@ function cerradosPorFranja_(ocupacion, aj) {
   Object.keys(ocupacion).forEach(function (f) {
     ['manana', 'tarde'].forEach(function (fr) {
       var o = ocupacion[f][fr];
-      var motivo = o.citas >= aj.tope ? 'citas' : (o.horas >= aj.limiteHoras ? 'horas' : '');
+      var motivo = o.bloqueo ? 'bloqueo' : (o.citas >= aj.tope ? 'citas' : (o.horas >= aj.limiteHoras ? 'horas' : ''));
       if (motivo) (cerrados[f] = cerrados[f] || {})[fr] = motivo;
     });
   });
@@ -671,8 +786,8 @@ function panelDatos() {
   var hasta = Utilities.formatDate(new Date(hoy.getTime() + 120 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
   return {
     reservas: reservas, activos: ESTADOS_ACTIVOS, ajustes: ajustes_(), modos: modosDias_(), inicios: { manana: CONFIG.HORA_MANANA[0], tarde: CONFIG.HORA_TARDE[0] },
-    corte: CONFIG.CORTE_FRANJA,
-    horasSinDuracion: CONFIG.HORAS_SIN_DURACION,
+    corte: CONFIG.CORTE_FRANJA, horasInicio: CONFIG.HORAS_INICIO,
+    horasSinDuracion: CONFIG.HORAS_SIN_DURACION, whatsappApi: whatsappListo_(),
     hoy: Utilities.formatDate(hoy, CONFIG.ZONA, 'yyyy-MM-dd'),
     agenda: agenda_(desde, hasta, todas), agendaDesde: desde, agendaHasta: hasta
   };
@@ -700,7 +815,7 @@ function agenda_(desde, hasta, reservas) {
     return {
       titulo: ev.getTitle(), fecha: f(s, 'yyyy-MM-dd'), ini: f(s, 'HH:mm'), fin: f(e, 'yyyy-MM-dd') > f(s, 'yyyy-MM-dd') ? '23:59' : f(e, 'HH:mm'),
       todoElDia: ev.isAllDayEvent(), reserva: r.id || '', estado: r.estado || '', nombre: r.nombre || '', servicio: r.servicio || '',
-      celular: r.celular || ''
+      celular: r.celular || '', id: ev.getId(), bloqueo: esBloqueo_(ev)
     };
   });
 }
@@ -782,6 +897,156 @@ function confirmarCita(id) {
   return respuesta_(r, enviarCorreo_('citaConfirmada', r));
 }
 
+/** Crea (o recrea) el evento de Calendar de una reserva. Color: verde = confirmada. */
+function ponerEnCalendario_(r, fecha, horaInicio, horaFin) {
+  var inicio = fechaHora_(fecha, horaInicio), fin = fechaHora_(fecha, horaFin);
+  if (!(fin > inicio)) throw new Error('La hora de fin debe ser posterior a la de inicio.');
+  borrarEvento_(r);
+  var evento = CalendarApp.getDefaultCalendar().createEvent(tituloEvento_(r), inicio, fin, {
+    location: CONFIG.DIRECCION, description: descripcionEvento_(r)
+  });
+  try { evento.setColor(CalendarApp.EventColor.GREEN); } catch (e) { /* color opcional */ }
+  r.fecha_cita = fecha; r.hora_inicio = horaInicio; r.hora_fin = horaFin; r.evento_id = evento.getId();
+  limpiarCacheCalendario_();
+  return evento;
+}
+
+function descripcionEvento_(r) {
+  return [
+    'Clienta: ' + (r.nombre || '—'),
+    r.correo ? 'Correo: ' + r.correo : '',
+    r.celular ? 'Celular: ' + r.celular : '',
+    'Servicio: ' + r.servicio + (r.categoria ? ' (' + r.categoria + ')' : '') + (r.largo ? ' · largo ' + r.largo : ''),
+    Number(r.deposito) > 0 ? 'Depósito SINPE: ' + colones_(r.deposito) + ' · descripción "' + r.descripcion_sinpe + '"' : '',
+    r.precio_min ? 'Precio estimado: ' + colones_(r.precio_min) + ' – ' + colones_(r.precio_max) : '',
+    r.tipo_cliente ? 'Clienta ' + r.tipo_cliente : '',
+    r.expectativas ? 'Expectativas: ' + r.expectativas : '',
+    r.comentarios ? 'Comentarios: ' + r.comentarios : '',
+    r.comprobante_url ? 'Comprobante: ' + r.comprobante_url : '',
+    r.origen === 'manual' ? 'Cita creada desde el panel' : '',
+    'Reserva: ' + r.id
+  ].filter(String).join('\n');
+}
+
+/** "Requiere aprobación" → aprobar: se agenda a la hora pedida y se le confirma a la clienta. */
+function aprobarReserva(id) {
+  exigirAdmin_();
+  var r = buscarReserva_(id);
+  if (r.estado !== ESTADOS.REQUIERE_APROBACION) throw new Error('Esa reserva no está pendiente de aprobación.');
+  var ini = r.hora_solicitada || (r.franja === 'Tarde' ? '13:00' : '09:00');
+  ponerEnCalendario_(r, r.fecha_solicitada, ini, sumarHoras_(ini, duracionEstimada_(r)));
+  actualizarReserva_(r, { estado: ESTADOS.CITA_CONFIRMADA, revisada: '', motivo: '' }, 'aprobada y agendada ' + r.fecha_cita + ' ' + r.hora_inicio);
+  return respuesta_(r, avisarClienta_(r, 'confirmada'));
+}
+
+/**
+ * Ajustar fecha/horario desde "Por agendar" o "Confirmadas" (duración real del procedimiento).
+ * Si solo cambia la hora de fin no se avisa a la clienta (libera o toma espacio en silencio);
+ * si cambia la fecha o la hora de inicio, o la cita aún no estaba en el calendario, se le avisa.
+ */
+function ajustarHorario(id, fecha, horaInicio, horaFin) {
+  exigirAdmin_();
+  var r = buscarReserva_(id);
+  var antes = { fecha: r.fecha_cita, ini: r.hora_inicio, evento: r.evento_id };
+  ponerEnCalendario_(r, fecha, horaInicio, horaFin);
+  var avisar = !antes.evento || antes.fecha !== fecha || antes.ini !== horaInicio;
+  var cambios = { estado: ESTADOS.CITA_CONFIRMADA, revisada: 'sí', motivo: '' };
+  if (avisar) { cambios.recordatorio_enviado = ''; cambios.recordatorio_3d = ''; }
+  actualizarReserva_(r, cambios, 'horario ajustado ' + fecha + ' ' + horaInicio + '–' + horaFin + (avisar ? ' (se avisó a la clienta)' : ''));
+  return respuesta_(r, avisar ? avisarClienta_(r, antes.evento ? 'actualizada' : 'confirmada') : null);
+}
+
+/** "Horario correcto": pasa de Por agendar a Confirmadas sin cambiar nada. */
+function marcarRevisada(id) {
+  exigirAdmin_();
+  var r = buscarReserva_(id);
+  actualizarReserva_(r, { revisada: 'sí' }, 'horario revisado por el salón');
+  return respuesta_(r);
+}
+
+/**
+ * Cita creada por el salón (teléfono, WhatsApp, reservas de noviembre/diciembre…). Se comporta como una cita
+ * real: bloquea el calendario, queda en la base de datos, recibe recordatorios y (si hay contacto) confirmación.
+ * datos: { categoria, servicio, codigo, largo, nombre, celular, correo, fecha, horaInicio, horaFin, comentarios,
+ *          precio_min, precio_max, dur_min_h, dur_max_h, enviarWhatsapp, enviarCorreo }
+ */
+function crearCitaManual(datos) {
+  exigirAdmin_();
+  var t = function (v, max) { return String(v == null ? '' : v).trim().slice(0, max || 200); };
+  if (!t(datos.servicio)) throw new Error('Elegí el servicio.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t(datos.fecha))) throw new Error('Fecha inválida.');
+  var r = {
+    nombre: t(datos.nombre, 120) || 'Cita manual', celular: t(datos.celular, 40), correo: t(datos.correo, 120),
+    categoria: t(datos.categoria), servicio: t(datos.servicio), codigo: t(datos.codigo, 40), largo: t(datos.largo, 40),
+    precio_min: Number(datos.precio_min) || 0, precio_max: Number(datos.precio_max) || 0,
+    dur_min_h: Number(datos.dur_min_h) || 0, dur_max_h: Number(datos.dur_max_h) || 0,
+    fecha_solicitada: t(datos.fecha, 10), hora_solicitada: t(datos.horaInicio, 5),
+    comentarios: t(datos.comentarios, 1000), origen: 'manual', revisada: 'sí',
+    whatsapp_ok: datos.enviarWhatsapp ? 'sí' : '', estado: ESTADOS.CITA_CONFIRMADA, deposito: 0
+  };
+  r.franja = horaNumero_(r.hora_solicitada) < CONFIG.CORTE_FRANJA ? 'Mañana' : 'Tarde';
+  if (r.correo && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(r.correo)) throw new Error('El correo no es válido.');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    r.id = 'AM-' + Utilities.formatDate(new Date(), CONFIG.ZONA, 'yyMMdd-HHmmss') + '-' + Math.floor(Math.random() * 900 + 100);
+    r.creado = new Date();
+    r.historial = fechaTexto_(new Date()) + ' · cita creada desde el panel';
+    guardarFila_(r);
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  r = buscarReserva_(r.id);
+  ponerEnCalendario_(r, r.fecha_solicitada, t(datos.horaInicio, 5), t(datos.horaFin, 5));
+  actualizarReserva_(r, {}, 'agendada en Google Calendar ' + r.fecha_cita + ' ' + r.hora_inicio + '–' + r.hora_fin);
+  var aviso = null;
+  if (datos.enviarWhatsapp || datos.enviarCorreo) aviso = avisarClienta_(r, 'confirmada', { whatsapp: !!datos.enviarWhatsapp, correo: !!datos.enviarCorreo });
+  return respuesta_(r, aviso);
+}
+
+/** "Espacio bloqueado" (vacaciones, ausencia, viaje…): evento gris en Calendar, sin clienta ni avisos. */
+function crearBloqueo(fecha, horaInicio, horaFin, motivo, fechaFin) {
+  exigirAdmin_();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error('Fecha inválida.');
+  var titulo = PREFIJO_BLOQUEO + (motivo ? ' · ' + String(motivo).slice(0, 80) : '');
+  var cal = CalendarApp.getDefaultCalendar(), ev;
+  if (!horaInicio) {   // días completos (de fecha a fechaFin, inclusive)
+    var hasta = fechaFin && fechaFin >= fecha ? fechaFin : fecha;
+    ev = cal.createAllDayEvent(titulo, fechaDesdeISO_(fecha), new Date(fechaDesdeISO_(hasta).getTime() + 864e5),
+      { description: 'Bloqueo interno creado desde el panel. No es una cita.' });
+  } else {
+    var ini = fechaHora_(fecha, horaInicio), fin = fechaHora_(fecha, horaFin);
+    if (!(fin > ini)) throw new Error('La hora de fin debe ser posterior a la de inicio.');
+    ev = cal.createEvent(titulo, ini, fin, { description: 'Bloqueo interno creado desde el panel. No es una cita.' });
+  }
+  try { ev.setColor(CalendarApp.EventColor.GRAY); } catch (e) { /* opcional */ }
+  limpiarCacheCalendario_();
+  return { bloqueo: ev.getId() };
+}
+
+function quitarBloqueo(eventoId) {
+  exigirAdmin_();
+  var ev = CalendarApp.getDefaultCalendar().getEventById(eventoId);
+  if (!ev) throw new Error('Ese bloqueo ya no existe.');
+  if (!esBloqueo_(ev)) throw new Error('Ese evento no es un espacio bloqueado.');
+  ev.deleteEvent();
+  limpiarCacheCalendario_();
+  return { bloqueoQuitado: eventoId };
+}
+
+/** Fotos del cabello de una reserva, para el visor del panel (llegan comprimidas desde la página). */
+function fotosReserva(id) {
+  exigirAdmin_();
+  var r = buscarReserva_(id);
+  return String(r.fotos_ids || '').split(',').filter(String).map(function (fid) {
+    try {
+      var b = DriveApp.getFileById(fid).getBlob();
+      return { nombre: b.getName(), url: 'data:' + b.getContentType() + ';base64,' + Utilities.base64Encode(b.getBytes()), drive: 'https://drive.google.com/file/d/' + fid + '/view' };
+    } catch (e) { return { nombre: 'No disponible', url: '', drive: '' }; }
+  });
+}
+
 /**
  * "Eliminar" desde el panel: la reserva deja de verse y libera su espacio, pero la fila se conserva en la
  * hoja (estado "eliminada") para no perder el registro. También quita su evento de Calendar. No envía correos.
@@ -802,9 +1067,10 @@ function eliminarReserva(id) {
 var CAMBIOS_SIN_CORREO = {
   completada: [ESTADOS.CITA_CONFIRMADA, ESTADOS.CITA_AGENDADA, ESTADOS.NO_ASISTIO],
   no_asistio: [ESTADOS.CITA_CONFIRMADA, ESTADOS.CITA_AGENDADA, ESTADOS.COMPLETADA],
-  cancelada: [ESTADOS.PAGO_POR_VALIDAR, ESTADOS.PAGO_APROBADO, ESTADOS.DIA_SATURADO, ESTADOS.CITA_AGENDADA, ESTADOS.CITA_CONFIRMADA],
+  cancelada: [ESTADOS.PAGO_POR_VALIDAR, ESTADOS.PAGO_APROBADO, ESTADOS.DIA_SATURADO, ESTADOS.CITA_AGENDADA, ESTADOS.CITA_CONFIRMADA, ESTADOS.REQUIERE_APROBACION],
   cita_confirmada: [ESTADOS.COMPLETADA, ESTADOS.NO_ASISTIO],          // deshacer "completada"
-  pago_por_validar: [ESTADOS.PAGO_RECHAZADO, ESTADOS.CANCELADA],     // reabrir
+  pago_por_validar: [ESTADOS.PAGO_RECHAZADO],                        // reabrir reservas antiguas
+  requiere_aprobacion: [ESTADOS.CANCELADA, ESTADOS.DIA_SATURADO],      // reabrir
   pago_aprobado: [ESTADOS.CANCELADA, ESTADOS.DIA_SATURADO]
 };
 
@@ -816,7 +1082,8 @@ function cambiarEstado(id, nuevo) {
   if (!desde || desde.indexOf(r.estado) < 0) throw new Error('No se puede pasar de "' + r.estado + '" a "' + nuevo + '".');
   if (nuevo === ESTADOS.CITA_CONFIRMADA && !r.fecha_cita) throw new Error('Esa reserva no tiene fecha en el calendario.');
   var cambios = { estado: nuevo };
-  if (nuevo === ESTADOS.CANCELADA || nuevo === ESTADOS.PAGO_POR_VALIDAR || nuevo === ESTADOS.PAGO_APROBADO) {
+  if (nuevo === ESTADOS.CITA_CONFIRMADA) cambios.revisada = 'sí';
+  if (nuevo === ESTADOS.CANCELADA || nuevo === ESTADOS.PAGO_POR_VALIDAR || nuevo === ESTADOS.PAGO_APROBADO || nuevo === ESTADOS.REQUIERE_APROBACION) {
     borrarEvento_(r);
     cambios.evento_id = '';
     cambios.fecha_cita = ''; cambios.hora_inicio = ''; cambios.hora_fin = '';
@@ -832,7 +1099,7 @@ function borrarEvento_(r) {
   try { CalendarApp.getDefaultCalendar().getEventById(r.evento_id).deleteEvent(); } catch (e) { /* ya no existe */ }
 }
 
-// ------------------------------------------------------------------ Recordatorio 24 h (disparador cada 15 minutos)
+// ------------------------------------------------------------------ Recordatorios 3 días y 1 día (disparador cada 15 minutos)
 function enviarRecordatorios() {
   var ahora = new Date().getTime();
   leerReservas_().forEach(function (r) {
@@ -842,20 +1109,80 @@ function enviarRecordatorios() {
       actualizarReserva_(r, { estado: ESTADOS.COMPLETADA }, 'completada automáticamente al terminar la cita');
       return;
     }
-    if (r.estado !== ESTADOS.CITA_CONFIRMADA || r.recordatorio_enviado || !r.fecha_cita || !r.hora_inicio) return;
+    if (r.estado !== ESTADOS.CITA_CONFIRMADA || !r.fecha_cita || !r.hora_inicio) return;
     var faltan = (fechaHora_(r.fecha_cita, r.hora_inicio).getTime() - ahora) / 36e5;
-    if (faltan > 0 && faltan <= 24) {
-      if (enviarCorreo_('recordatorio', r)) {
-        actualizarReserva_(r, { recordatorio_enviado: new Date() }, 'recordatorio 24 h enviado');
-      }
+    if (!r.recordatorio_3d && faltan > 24 && faltan <= 72) {
+      var envio3 = avisarClienta_(r, 'recordatorio3');
+      if (envio3) actualizarReserva_(r, { recordatorio_3d: new Date() }, 'recordatorio 3 días enviado (' + envio3 + ')');
+    } else if (!r.recordatorio_enviado && faltan > 0 && faltan <= 24) {
+      var envio1 = avisarClienta_(r, 'recordatorio1');
+      if (envio1) actualizarReserva_(r, { recordatorio_enviado: new Date(), recordatorio_3d: r.recordatorio_3d || 'omitido' }, 'recordatorio 1 día enviado (' + envio1 + ')');
     }
   });
+}
+
+// ------------------------------------------------------------------ Avisos a la clienta (correo + WhatsApp)
+/**
+ * tipo: 'confirmada' | 'revision' | 'actualizada' | 'recordatorio3' | 'recordatorio1'
+ * canales: { whatsapp, correo } (por defecto ambos). Devuelve texto con lo enviado ('correo+whatsapp'…) o ''.
+ */
+function avisarClienta_(r, tipo, canales) {
+  canales = canales || { whatsapp: true, correo: true };
+  var enviados = [];
+  var correo = {
+    confirmada: ['citaConfirmada'], actualizada: ['citaConfirmada'], recordatorio1: ['recordatorio'], recordatorio3: ['recordatorio3d'],
+    revision: ['solicitud', { nota_pago: 'Recibimos su reserva. ' + MENSAJE_APROBACION + ' Le escribiremos para confirmarla.' }]
+  }[tipo];
+  var wa = { confirmada: 'reserva_confirmada', actualizada: 'cita_actualizada', revision: 'reserva_en_revision',
+             recordatorio3: 'recordatorio_3_dias', recordatorio1: 'recordatorio_1_dia' }[tipo];
+  if (canales.correo && r.correo && correo && enviarCorreo_(correo[0], r, correo[1])) enviados.push('correo');
+  if (canales.whatsapp && r.celular && wa && enviarWhatsApp_(wa, r)) enviados.push('whatsapp');
+  return enviados.join('+');
+}
+
+function whatsappListo_() {
+  var p = PropertiesService.getScriptProperties();
+  return !!(p.getProperty('WHATSAPP_TOKEN') && p.getProperty('WHATSAPP_PHONE_ID'));
+}
+
+/** Número de Costa Rica a formato internacional (8 dígitos → 506XXXXXXXX). */
+function telefonoWhatsApp_(cel) {
+  var d = String(cel || '').replace(/\D/g, '');
+  if (d.length === 8) d = '506' + d;
+  return d.length >= 10 ? d : '';
+}
+
+/** Envía una plantilla aprobada de WhatsApp (Cloud API de Meta). Sin token configurado no hace nada. */
+function enviarWhatsApp_(plantilla, r) {
+  if (!whatsappListo_()) return false;
+  var tel = telefonoWhatsApp_(r.celular);
+  var orden = CONFIG.WHATSAPP_API.plantillas[plantilla];
+  if (!tel || !orden) return false;
+  var p = PropertiesService.getScriptProperties();
+  var vals = {
+    nombre: String(r.nombre || '').split(' ')[0] || 'clienta', servicio: r.servicio,
+    fecha: fechaLarga_(r.fecha_cita || r.fecha_solicitada),
+    hora: hora12_(r.hora_inicio || r.hora_solicitada || (r.franja === 'Tarde' ? '13:00' : '09:00')),
+    direccion: CONFIG.DIRECCION
+  };
+  var resp = UrlFetchApp.fetch('https://graph.facebook.com/' + CONFIG.WHATSAPP_API.version + '/' + p.getProperty('WHATSAPP_PHONE_ID') + '/messages', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { Authorization: 'Bearer ' + p.getProperty('WHATSAPP_TOKEN') },
+    payload: JSON.stringify({
+      messaging_product: 'whatsapp', to: tel, type: 'template',
+      template: { name: plantilla, language: { code: CONFIG.WHATSAPP_API.idioma },
+        components: [{ type: 'body', parameters: orden.map(function (k) { return { type: 'text', text: String(vals[k] || '') }; }) }] }
+    })
+  });
+  if (resp.getResponseCode() >= 300) { console.error('WhatsApp ' + plantilla + ': ' + resp.getResponseCode() + ' ' + resp.getContentText()); return false; }
+  return true;
 }
 
 // ------------------------------------------------------------------ Correos
 function parametrosCorreo_(r) {
   var fechaTxt = fechaLarga_(r.fecha_cita || r.fecha_solicitada);
-  var horaTxt = r.hora_inicio ? hora12_(r.hora_inicio) + (r.hora_fin ? ' – ' + hora12_(r.hora_fin) : '') : r.franja;
+  var horaTxt = r.hora_inicio ? hora12_(r.hora_inicio) + (r.hora_fin ? ' – ' + hora12_(r.hora_fin) : '')
+    : (r.hora_solicitada ? hora12_(r.hora_solicitada) : r.franja);
   var p = {
     correo: r.correo,
     nombre: String(r.nombre).split(' ')[0],
@@ -876,6 +1203,7 @@ function parametrosCorreo_(r) {
     waze: CONFIG.WAZE,
     maps: CONFIG.MAPS,
     whatsapp: CONFIG.WHATSAPP,
+    correo_salon: CONFIG.CORREO_CITAS,
     reserva_id: r.id,
     calendario_url: ''
   };
@@ -930,10 +1258,12 @@ function avisarAdmin_(r) {
   // URL de la publicación "Panel" (solo cuentas de amarecr.com). Ver INSTALAR.md.
   var url = CONFIG.PANEL_URL;
   var filas = [
-    ['Estado', r.estado === ESTADOS.PAGO_POR_VALIDAR ? 'Pago por validar' : 'Sin depósito — por agendar'],
-    ['Clienta', r.nombre], ['Celular', r.celular], ['Correo', r.correo],
+    ['Estado', r.estado === ESTADOS.REQUIERE_APROBACION ? 'REQUIERE APROBACIÓN (no está en el calendario todavía)' : 'Agendada en Google Calendar — revisar duración en "Por agendar"'],
+    ['Clienta', r.nombre + (r.tipo_cliente ? ' (clienta ' + r.tipo_cliente + ')' : '')], ['Celular', r.celular], ['Correo', r.correo],
     ['Servicio', r.servicio + ' (' + r.categoria + ') · ' + r.largo],
-    ['Fecha solicitada', fechaLarga_(r.fecha_solicitada) + ' · ' + r.franja],
+    ['Fecha y hora', fechaLarga_(r.fecha_solicitada) + ' · ' + hora12_(r.hora_solicitada || '09:00')],
+    ['Fotos del cabello', r.fotos_ids ? String(r.fotos_ids).split(',').length + ' (ver en el panel)' : 'No adjuntó'],
+    ['Expectativas', r.expectativas || '—'],
     ['Depósito', Number(r.deposito) > 0 ? colones_(r.deposito) : 'No requiere'],
     ['Descripción esperada del SINPE', r.descripcion_sinpe || '—'],
     ['Comentarios', r.comentarios || '—'],
@@ -949,8 +1279,8 @@ function avisarAdmin_(r) {
     '<p><a href="' + url + '" style="background:#0B0B0B;color:#F5F3EF;padding:12px 20px;text-decoration:none;display:inline-block">Abrir panel de reservas</a></p></div>';
   var opciones = { htmlBody: html, name: 'Reservas Amarë', replyTo: r.correo };
   if (r.comprobante_id) opciones.attachments = [DriveApp.getFileById(r.comprobante_id).getBlob()];
-  MailApp.sendEmail(CONFIG.ADMIN_EMAIL, (r.estado === ESTADOS.PAGO_POR_VALIDAR ? '[Validar pago] ' : '') +
-    'Nueva reserva: ' + r.servicio + ' · ' + r.fecha_solicitada + ' ' + r.franja + ' · ' + r.nombre, 'Nueva reserva ' + r.id, opciones);
+  MailApp.sendEmail(CONFIG.ADMIN_EMAIL, (r.estado === ESTADOS.REQUIERE_APROBACION ? '[Requiere aprobación] ' : '') +
+    'Nueva reserva: ' + r.servicio + ' · ' + r.fecha_solicitada + ' ' + hora12_(r.hora_solicitada || '09:00') + ' · ' + r.nombre, 'Nueva reserva ' + r.id, opciones);
 }
 
 // ------------------------------------------------------------------ Utilidades

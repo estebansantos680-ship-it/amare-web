@@ -9,14 +9,15 @@
 <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=202610092041">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css?v=202610101137">
 </head>
 <body>
 
   <div class="topbar">
     <div class="wrap">
-      <span class="topbar-msg">Martes a sábado · 9:00 a.m. – 6:00 p.m. · Calle 42, San José</span>
+      <span class="topbar-msg">Martes a sábado · 9:00 a.m. – 6:00 p.m.</span>
+      <span class="topbar-loc">San José, Santa Ana</span>
       <a href="tel:+50688073849" class="topbar-phone">+506 8807-3849</a>
     </div>
   </div>
@@ -43,13 +44,13 @@
           <a class="social-link" href="https://www.instagram.com/amare_beauty_center?igsh=bHp3OWF2eWdkdmVj" target="_blank" rel="noopener noreferrer" aria-label="Síguenos en Instagram">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17" cy="7" r="0.6" fill="currentColor" stroke="none"/></svg>
           </a>
+          <a class="social-link" href="https://www.tiktok.com/@amarebeautycenter?is_from_webapp=1&amp;sender_device=pc" target="_blank" rel="noopener noreferrer" aria-label="Síguenos en TikTok">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3.5v11.3a3.3 3.3 0 1 1-3.3-3.3"/><path d="M13.5 3.5c.4 2.7 2.3 4.5 5 4.7"/></svg>
+          </a>
           <a class="social-link" href="https://www.facebook.com/shinestyle2020/" target="_blank" rel="noopener noreferrer" aria-label="Síguenos en Facebook">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M14 21v-7h2.5l.5-3H14V9c0-.9.3-1.5 1.7-1.5H17V4.8c-.3 0-1.2-.1-2.3-.1-2.3 0-3.7 1.4-3.7 3.9V11H8.5v3H11v7Z"/></svg>
           </a>
         </div>
-        <a class="admin-link" href="admin.html" aria-label="Acceso de administración" title="Administración">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20.5c1.2-3.7 4-5.6 7.5-5.6s6.3 1.9 7.5 5.6"/></svg>
-        </a>
         <button class="menu-toggle" id="menuToggle" aria-label="Abrir menú" aria-expanded="false" aria-controls="navLinks"><span></span></button>
       </div>
     </nav>
@@ -61,7 +62,7 @@
       <div class="wrap">
         <p class="eyebrow">Reserva en línea</p>
         <h1>Reserva tu momento Amarë</h1>
-        <p>Elige tu servicio, el largo de tu cabello y el día que prefieras. En menos de un minuto tu solicitud llega a nuestro equipo y te confirmamos tu espacio por WhatsApp.</p>
+        <p>Elige tu servicio, el largo de tu cabello, el día y la hora. Al terminar, tu espacio queda reservado y te llega la confirmación por WhatsApp y correo.</p>
       </div>
     </section>
 
@@ -71,7 +72,7 @@
           <div class="booking-steps" id="bookingSteps">
             <span class="step active" data-step="1">1. Servicio</span>
             <span class="step" data-step="2">2. Largo de cabello</span>
-            <span class="step" data-step="3">3. Fecha</span>
+            <span class="step" data-step="3">3. Fecha y hora</span>
             <span class="step" data-step="4">4. Tus datos</span>
             <span class="step" data-step="5">5. Confirmar</span>
           </div>
@@ -87,6 +88,7 @@
           <option value="Técnica de Color">Técnica de Color</option>
           <option value="Color Parejo">Color Parejo</option>
           <option value="Corte de Cabello">Corte de Cabello</option>
+          <option value="Tratamiento en Rizos">Tratamiento en Rizos</option>
               </select>
 
               <label for="selServicio">Servicio</label>
@@ -129,11 +131,9 @@
               <div class="calendario" id="calendario" aria-label="Elige la fecha de tu cita"></div>
               <p class="service-note">Atendemos de martes a sábado, 9:00 a.m. a 6:00 p.m. Domingo y lunes cerrado.</p>
 
-              <label>¿Qué momento del día prefieres?</label>
-              <div class="franja-grid">
-                <button type="button" class="franja-option" data-franja="Mañana">Mañana</button>
-                <button type="button" class="franja-option" data-franja="Tarde">Tarde</button>
-              </div>
+              <label>¿A qué hora iniciamos tu cita?</label>
+              <div class="franja-grid hora-grid" id="horaGrid" aria-live="polite"></div>
+              <p class="service-note" id="horaNota">Elige primero la fecha. Las horas disponibles dependen del servicio.</p>
 
               <div id="availabilityResult" class="availability-result" hidden></div>
 
@@ -154,8 +154,36 @@
               <label for="inpCorreo">Correo electrónico</label>
               <input type="email" id="inpCorreo" autocomplete="email" placeholder="Ej. maria@correo.com" required>
 
+              <label for="selTipoCliente">¿Ya nos has visitado?</label>
+              <select id="selTipoCliente" required>
+                <option value="">Elige una opción</option>
+                <option value="nuevo">Soy cliente nueva</option>
+                <option value="regular">Soy cliente regular</option>
+              </select>
+
+              <div class="fotos-cabello" id="fotosCabello" hidden>
+                <p class="fotos-titulo"><span id="fotosRequisito">Fotos de tu cabello</span></p>
+                <p class="fotos-ayuda"><strong>Toma las fotos con el cabello suelto, preferiblemente desde atrás, o de frente de manera que se vea con exactitud el largo y el volumen de tu cabello.</strong></p>
+                <p class="fotos-ayuda" id="fotosRegular" hidden><strong>Si sos cliente regular y tenés 6 meses o más de no visitarnos, por favor adjuntá una foto actual de tu cabello y contanos cuál es el resultado que esperás obtener en caso de realizarte una técnica de color. Esto nos permitirá estimar correctamente el tiempo necesario para tu procedimiento.</strong></p>
+                <p class="fotos-ayuda"><strong>Si tu cita es para un Alisamientos Capilares-Tratamiento capilar o Cirugia Capilar, únicamente necesitamos que adjuntés una foto actual de tu cabello.</strong></p>
+                <label class="upload-zona" id="fotosZona" for="inpFotos">
+                  <strong>Subir fotos de tu cabello</strong>
+                  <span>Toca aquí · JPG o PNG · hasta 4 fotos</span>
+                  <input type="file" id="inpFotos" accept="image/jpeg,image/png,image/webp" multiple>
+                </label>
+                <div class="fotos-lista" id="fotosLista"></div>
+
+                <label for="inpExpectativas">¿Qué resultado esperás? <span class="optional">(opcional)</span></label>
+                <textarea id="inpExpectativas" rows="3" placeholder="Ej. quiero un rubio más claro en las puntas, conservar el largo, menos volumen…"></textarea>
+              </div>
+
               <label for="inpNotas">Comentarios <span class="optional">(opcional)</span></label>
               <textarea id="inpNotas" rows="3" placeholder="Cuéntanos si tienes alguna alergia, un tono en mente o algo que debamos saber."></textarea>
+
+              <label class="policy-check">
+                <input type="checkbox" id="chkWhatsapp" checked>
+                Acepto recibir la confirmación y los recordatorios de mi cita por WhatsApp.
+              </label>
 
               <p class="field-error" id="datosError" hidden></p>
 
@@ -169,12 +197,14 @@
               <div class="booking-summary" id="bookingSummary"></div>
 
               <div class="pago-box" id="pagoBox" hidden>
-                <span class="eyebrow">Depósito para confirmar tu cita</span>
+                <span class="eyebrow pago-titulo">Para confirmar su cita se requiere un depósito</span>
                 <p class="pago-monto"><span id="pagoMonto"></span> <small>se descuenta del total del servicio</small></p>
+                <p class="pago-link-leyenda">¿No contás con el depósito en este momento? Seleccioná “Solicitar link de pago” y te enviaremos un enlace para realizar tu pago con tu tarjeta de crédito y realizar la reservación de tu cita.</p>
                 <ol class="pago-pasos">
                   <li>Haz un <strong>SINPE Móvil</strong> o una <strong>transferencia</strong> por el monto exacto:
                     <div class="pago-dato"><span>SINPE Móvil</span><code id="pagoSinpe">8807-3849</code><button type="button" class="btn-copiar" data-copiar="88073849">Copiar</button></div>
                     <div class="pago-dato"><span>Cuenta IBAN</span><code id="pagoIban">CR79010200009718091249</code><button type="button" class="btn-copiar" data-copiar="CR79010200009718091249">Copiar</button></div>
+                    <a class="btn-pill btn-link-pago" id="btnLinkPago" href="#" target="_blank" rel="noopener noreferrer">Solicitar link de pago de reserva</a>
                   </li>
                   <li>En la descripción del pago escribe tu nombre, un apellido y el día de tu cita:
                     <div class="pago-dato"><code id="pagoConcepto"></code><button type="button" class="btn-copiar" id="copiarConcepto">Copiar</button></div>
@@ -192,7 +222,7 @@
                   <div class="info"><span id="comprobanteNombre"></span><small id="comprobanteTam"></small></div>
                   <button type="button" class="btn-copiar" id="quitarComprobante">Cambiar</button>
                 </div>
-                <p class="pago-nota">Tu espacio queda apartado mientras validamos el comprobante. Si el monto no coincide o no se puede verificar, liberaremos el espacio y te avisaremos el motivo por WhatsApp.</p>
+                <p class="pago-nota">Al confirmar, tu espacio queda reservado y te llega la confirmación por WhatsApp y correo. Si hay algún problema con el depósito, te escribimos.</p>
               </div>
 
               <label class="policy-check">
@@ -206,15 +236,26 @@
                 <button type="button" class="btn btn-outline" data-prev="4">Atrás</button>
                 <button type="button" id="btnConfirmar" class="btn btn-solid" disabled>Confirmar reserva</button>
               </div>
+
+              <div class="booking-help booking-help-inline">
+                <div>
+                  <span class="eyebrow">¿Tenés dudas?</span>
+                  <p>Te ayudamos a terminar tu reserva.</p>
+                </div>
+                <div class="booking-help-actions">
+                  <a class="btn-pill" href="https://api.whatsapp.com/send?phone=50688073849&amp;text=Hola%20Amar%C3%AB!%20Necesito%20ayuda%20para%20terminar%20mi%20reserva." target="_blank" rel="noopener noreferrer">Escríbenos por WhatsApp</a>
+                  <a class="btn-pill" href="tel:+50688073849">Llamar +506 8807-3849</a>
+                </div>
+              </div>
             </div>
 
             <div class="booking-panel booking-done" data-panel="6" hidden>
               <span class="done-mark" aria-hidden="true">✦</span>
-              <h2 id="doneTitle">¡Solicitud recibida!</h2>
-              <p id="doneTexto">Tu solicitud ya está con nuestro equipo y te enviamos el resumen a tu correo.</p>
-              <p class="service-note">Toca el botón para avisarnos por WhatsApp y agilizar la confirmación.</p>
+              <h2 id="doneTitle">¡Tu cita está reservada!</h2>
+              <p id="doneTexto">Te enviamos la confirmación por WhatsApp y a tu correo.</p>
+              <p class="service-note">¿Necesitás cambiar algo? Escribinos por WhatsApp; las cancelaciones y cambios se coordinan directamente con el salón.</p>
               <div class="booking-nav center">
-                <a href="#" id="doneWhatsapp" class="btn btn-solid" target="_blank" rel="noopener noreferrer">Avisar por WhatsApp</a>
+                <a href="#" id="doneWhatsapp" class="btn btn-solid" target="_blank" rel="noopener noreferrer">Escribir por WhatsApp</a>
                 <a href="index.html" class="btn btn-outline">Volver al inicio</a>
               </div>
             </div>
@@ -250,11 +291,12 @@
           <h4>Contáctanos</h4>
           <p><a href="tel:+50688073849">+506 8807-3849</a></p>
           <p><a href="https://api.whatsapp.com/send?phone=50688073849&amp;text=Hola%20Amar%C3%AB!%20Me%20gustar%C3%ADa%20agendar%20una%20cita%20y%20cotizar%20sus%20servicios." target="_blank" rel="noopener noreferrer">WhatsApp</a></p>
+          <p><a href="mailto:citas@amarecr.com">citas@amarecr.com</a></p>
         </div>
         <div>
           <h4>Dirección</h4>
-          <address>Calle 42, San José, Costa Rica</address>
-          <p class="signals">Casa color blanca a mano izquierda, contiguo a Minisuper AMD, antes del reductor de velocidad.</p>
+          <address>Calle 42, San José, Santa Ana, Costa Rica</address>
+          <p class="signals"><strong>LOCAL COLOR BLANCO</strong> a mano izquierda, contiguo a Minisuper AMD, antes del reductor de velocidad.</p>
         </div>
         <div>
           <h4>Horarios</h4>
@@ -279,8 +321,11 @@
         </div>
       </div>
       <div class="footer-bottom">
-        <span>© 2026 Amarë Beauty Center. Todos los derechos reservados. Las fotos y videos de nuestras clientas se publican con su autorización.</span>
+        <span>© 2026 Amarë Beauty Center. Todos los derechos reservados. Las fotos y videos de nuestras clientas se publican con su autorización. <a class="admin-foot" href="admin.html" aria-label="Acceso de administración" title="Administración"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20.5c1.2-3.7 4-5.6 7.5-5.6s6.3 1.9 7.5 5.6"/></svg></a></span>
         <div class="foot-social">
+          <a class="social-link" href="https://www.tiktok.com/@amarebeautycenter?is_from_webapp=1&amp;sender_device=pc" target="_blank" rel="noopener noreferrer" aria-label="Síguenos en TikTok">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3.5v11.3a3.3 3.3 0 1 1-3.3-3.3"/><path d="M13.5 3.5c.4 2.7 2.3 4.5 5 4.7"/></svg>
+          </a>
           <a class="social-link" href="https://www.facebook.com/shinestyle2020/" target="_blank" rel="noopener noreferrer" aria-label="Síguenos en Facebook">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M14 21v-7h2.5l.5-3H14V9c0-.9.3-1.5 1.7-1.5H17V4.8c-.3 0-1.2-.1-2.3-.1-2.3 0-3.7 1.4-3.7 3.9V11H8.5v3H11v7Z"/></svg>
           </a>
@@ -299,8 +344,8 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 20l1.3-4.2A7.7 7.7 0 1 1 9 18.6L4 20Z"/><path d="M8.5 9.7c0 3.3 2.7 6 6 6"/></svg>
   </a>
 
-  <script src="js/main.js?v=202610092041"></script>
-  <script src="js/services-data.js?v=202610092041"></script>
-  <script src="js/booking.js?v=202610092041"></script>
+  <script src="js/main.js?v=202610101137"></script>
+  <script src="js/services-data.js?v=202610101137"></script>
+  <script src="js/booking.js?v=202610101137"></script>
 </body>
 </html>

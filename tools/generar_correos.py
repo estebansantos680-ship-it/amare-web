@@ -103,10 +103,12 @@ def pagina(titulo, preheader, eyebrow, saludo, parrafos, bloques, variables):
             <td align="center" style="background:#0B0B0B;padding:30px 24px;font-family:{SANS};">
               <div style="font-family:{SERIF};font-style:italic;font-size:15px;color:#F5F3EF;line-height:1.5;">La belleza no comienza en el espejo,<br>sino en cómo nos sentimos.</div>
               <div style="font-size:12px;color:#B5A48A;padding-top:16px;line-height:1.8;">
-                Calle 42, San José, Costa Rica · Martes a sábado, 9:00 a.m. – 6:00 p.m.<br>
+                Calle 42, San José, Santa Ana, Costa Rica · Martes a sábado, 9:00 a.m. – 6:00 p.m.<br>
                 <a href="tel:+50688073849" style="color:#B5A48A;text-decoration:none;">+506 8807-3849</a> ·
                 <a href="https://amarecr.com" style="color:#B5A48A;text-decoration:none;">amarecr.com</a> ·
-                <a href="https://www.instagram.com/amare_beauty_center" style="color:#B5A48A;text-decoration:none;">Instagram</a>
+                <a href="https://www.instagram.com/amare_beauty_center" style="color:#B5A48A;text-decoration:none;">Instagram</a> ·
+                <a href="https://www.tiktok.com/@amarebeautycenter" style="color:#B5A48A;text-decoration:none;">TikTok</a><br>
+                <a href="mailto:citas@amarecr.com" style="color:#B5A48A;text-decoration:none;">citas@amarecr.com</a>
               </div>
             </td>
           </tr>
@@ -182,6 +184,17 @@ PLANTILLAS = {
                  botones(('Abrir en Waze', '{{waze}}'), ('Google Maps', '{{maps}}', True)),
                  nota('Si necesita reagendar, escríbanos por WhatsApp al +506 8807-3849. ' + POLITICA)],
         variables='{{nombre}} {{servicio}} {{fecha_hora}} {{duracion}} {{direccion}} {{senales}} {{waze}} {{maps}}'),
+
+    'recordatorio-3dias.html': dict(
+        titulo='Su cita se acerca', asunto='Su cita en Amarë es en 3 días · {{servicio}}',
+        preheader='Le esperamos: {{fecha_hora}}.',
+        eyebrow='Recordatorio', saludo='Hola {{nombre}}, <em style="color:#8A7A63;">¡su cita se acerca!</em>',
+        parrafos=['Le recordamos que en 3 días tiene su cita en Amarë Beauty Center. Ya tenemos su espacio reservado.'],
+        bloques=[tarjeta('Su cita', '{{servicio}}', [('Fecha y hora', '{{fecha_hora}}'), ('Duración estimada', '{{duracion}}'),
+                 ('Dirección', '{{direccion}}'), ('Cómo llegar', '{{senales}}')], ('¡Le esperamos!', 'Llegue unos minutos antes, por favor.')),
+                 botones(('Agregar a mi calendario', '{{calendario_url}}'), ('Cómo llegar', '{{waze}}', True)),
+                 nota('Si necesita reagendar, escríbanos por WhatsApp al +506 8807-3849. ' + POLITICA)],
+        variables='{{nombre}} {{servicio}} {{fecha_hora}} {{duracion}} {{direccion}} {{senales}} {{calendario_url}} {{waze}}'),
 }
 
 

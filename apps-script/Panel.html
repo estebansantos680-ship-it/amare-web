@@ -107,6 +107,8 @@
   .ev.ok{ background:#e3efe0; border-color:var(--ok); }
   .ev.pend{ background:#f5ecd6; border-color:var(--warn); }
   .ev.ext{ background:#ecebe8; border-color:var(--muted); }
+  .ev.bloq{ background:repeating-linear-gradient(45deg, #e4e2de 0 6px, #d6d3ce 6px 12px); border-color:#6b6762; color:#3d3a36; }
+  .extras div.bloq{ background:#dcd9d4; border-left-color:#6b6762; }
   .ev.prop{ background:repeating-linear-gradient(45deg, rgba(181,164,138,.25) 0 6px, rgba(181,164,138,.45) 6px 12px); border:2px dashed var(--taupe-deep); cursor:default; }
   .corto{ display:none; }
   .previa{ display:grid; grid-template-columns:40px 1fr; border:1px solid var(--line); background:#fff; }
@@ -138,15 +140,43 @@
     .hoja{ max-width:none; padding:20px 16px 26px; }
     .hoja .btn{ flex:1 1 100%; text-align:center; }
   }
+  /* Búsqueda, fotos, historial de la clienta, formularios del panel */
+  .filtros{ display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px; }
+  .filtros input{ flex:1 1 220px; }
+  .filtros input[type=date]{ flex:0 1 170px; }
+  .filtros .btn{ padding:9px 12px; }
+  .filtros.oculto{ display:none; }
+  select{ font:inherit; font-size:16px; padding:8px 10px; border:1px solid var(--line); background:#fff; max-width:100%; }
+  .form-panel .campos > div{ flex:1 1 150px; min-width:0; }
+  .form-panel .campos input, .form-panel .campos select, .form-panel textarea{ width:100%; }
+  .check{ display:flex; gap:8px; align-items:center; font-size:13px; text-transform:none; letter-spacing:0; color:var(--black); margin:6px 0; }
+  .fotos{ display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:8px; margin-top:12px; }
+  .fotos a{ display:block; } .fotos img{ width:100%; height:180px; object-fit:cover; border:1px solid var(--line); }
+  .hist-item{ border-top:1px solid var(--line); padding:8px 0; font-size:13px; }
+  .hist-item small{ color:var(--muted); display:block; }
+  .resumen-cli{ display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:8px; margin:10px 0; font-size:13px; }
+  .resumen-cli span{ display:block; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--taupe-deep); }
+  .hoja.ancha{ max-width:620px; }
+  header .der button.prim{ background:var(--cream); color:var(--black); }
+  @media (max-width:640px){ header .der button{ padding:8px 7px; letter-spacing:.04em; white-space:nowrap; } .der{ gap:6px; } .logo small{ letter-spacing:.15em; } .logo{ font-size:18px; } }
 </style>
+<script src="https://amarecr.com/js/services-data.js"></script>
 </head>
 <body>
 <header>
   <div class="logo">AMARË<small>PANEL DE RESERVAS</small></div>
-  <div class="der"><span id="sync"></span><button onclick="cargar()">Actualizar</button></div>
+  <div class="der"><span id="sync"></span>
+    <button class="prim" onclick="pedirCitaManual()" title="Agregar una cita desde el panel">+ Cita</button>
+    <button onclick="pedirBloqueo()" title="Bloquear un espacio (vacaciones, ausencias…)">Bloquear</button>
+    <button onclick="cargar()">Actualizar</button></div>
 </header>
 <main>
   <div class="tabs" id="tabs"></div>
+  <div class="filtros" id="filtros">
+    <input type="search" id="buscar" placeholder="Buscar por nombre, correo o teléfono" oninput="FILTRO.texto=this.value;pintar()">
+    <input type="date" id="buscarFecha" title="Filtrar por fecha" oninput="FILTRO.fecha=this.value;pintar()">
+    <button class="btn sec" onclick="limpiarFiltro()">Limpiar</button>
+  </div>
   <div id="lista"><p class="vacio">Cargando reservas…</p></div>
 </main>
 <div class="modal" id="modal" onclick="if(event.target===this)cerrarModal()"><div class="hoja" id="hoja"></div></div>
@@ -154,19 +184,20 @@
 
 <script>
   var DATOS = { reservas: [], ajustes: { limiteHoras: 6, tope: 4 }, modos: {}, horasSinDuracion: 2,
-                activos: ['pago_por_validar','pago_aprobado','cita_agendada','cita_confirmada'], agenda: [], hoy: '' };
+                activos: ['pago_por_validar','pago_aprobado','cita_agendada','cita_confirmada','requiere_aprobacion'], agenda: [], hoy: '' };
+  var FILTRO = { texto: '', fecha: '' };
   var ARRASTRANDO = null;  // id de la reserva que se está arrastrando hacia una pestaña
   var CARGA = {};          // fecha -> ocupación, calculada aquí mismo para que sea instantánea
   var CACHE = {};          // fecha -> eventos de Google Calendar de ese día
   var VISTA = [];          // eventos pintados en la agenda (para abrir el detalle)
-  var TAB = 'pago_por_validar';
+  var TAB = 'por_agendar';
   var SEMANA = '';         // lunes de la semana visible en Agenda
   var PX_HORA = 44, H0 = 8, H1 = 19;
   var DIAS_CERRADOS = [0, 1];
   var COLA = [], OCUPADO = false; // acciones que se guardan de fondo, una por una y en orden
   var TABS = [
     ['agenda', 'Agenda'],
-    ['pago_por_validar', 'Pagos por validar'],
+    ['requiere_aprobacion', 'Requiere aprobación'],
     ['por_agendar', 'Por agendar'],
     ['cita_confirmada', 'Confirmadas'],
     ['historial', 'Historial']
@@ -208,16 +239,30 @@
       var partes = { manana: Math.min(fin, corte) - Math.max(ini, 0), tarde: Math.min(fin, 24) - Math.max(ini, corte) };
       ['manana', 'tarde'].forEach(function(fr){ if (partes[fr] > 0) { o[fr].citas++; o[fr].horas += partes[fr]; } });
     };
-    (CACHE[f] || []).forEach(function(e){ if (!e.todoElDia) sumar(horas(e.ini), e.fin === '23:59' ? 24 : horas(e.fin)); });
+    (CACHE[f] || []).forEach(function(e){
+      // "Espacio bloqueado" no suma horas: cierra en la web las franjas que toca (igual que el servidor).
+      if (e.bloqueo) {
+        var fin = e.fin === '23:59' ? 24 : horas(e.fin);
+        (e.todoElDia ? ['manana', 'tarde'] : franjasDeTramo(horas(e.ini), fin)).forEach(function(fr){ o[fr].bloqueo = true; });
+        return;
+      }
+      if (!e.todoElDia) sumar(horas(e.ini), e.fin === '23:59' ? 24 : horas(e.fin));
+    });
     var inicios = DATOS.inicios || { manana: 9, tarde: 13 };
     DATOS.reservas.forEach(function(r){
       if (DATOS.activos.indexOf(r.estado) < 0 || tieneHorario(r) || r.fecha_solicitada !== f) return;
-      var ini = r.franja === 'Tarde' ? inicios.tarde : inicios.manana;
+      var ini = r.hora_solicitada ? horas(r.hora_solicitada) : (r.franja === 'Tarde' ? inicios.tarde : inicios.manana);
       sumar(ini, Math.min(ini + (Number(r.dur_max_h) || Number(r.dur_min_h) || DATOS.horasSinDuracion), 24));
     });
     o.manana.horas = Math.round(o.manana.horas * 10) / 10;
     o.tarde.horas = Math.round(o.tarde.horas * 10) / 10;
     return o;
+  }
+  function franjasDeTramo(ini, fin){
+    var corte = DATOS.corte || 12, f = [];
+    if (ini < corte && fin > 0) f.push('manana');
+    if (fin > corte) f.push('tarde');
+    return f.length ? f : ['manana'];
   }
   // ---------------------------------------------------------------- disponibilidad en la web (día, mañana, tarde)
   var FRANJAS = [['manana', 'Mañana'], ['tarde', 'Tarde']];
@@ -226,6 +271,7 @@
   /** Cierre automático de una franja por las reglas: 'citas' | 'horas' | '' */
   function cierreAuto(f, fr){
     var o = ocupacionDia(f)[fr];
+    if (o.bloqueo) return 'bloqueo';
     if (o.citas >= DATOS.ajustes.tope) return 'citas';
     if (o.horas >= DATOS.ajustes.limiteHoras) return 'horas';
     return '';
@@ -247,10 +293,12 @@
     if (franjaPasada(f, fr)) return 'pasada';
     var m = modoFranja(f, fr);
     if (m === 'bloquear') return 'bloqueada';
+    var auto = cierreAuto(f, fr);
+    if (auto === 'bloqueo') return 'bloqueo';   // un espacio bloqueado gana incluso a "Abrir"
     if (m === 'abrir') return 'abierta';
-    return cierreAuto(f, fr) || 'libre';
+    return auto || 'libre';
   }
-  function franjaCerrada(e){ return e === 'pasada' || e === 'bloqueada' || e === 'horas' || e === 'citas'; }
+  function franjaCerrada(e){ return e === 'pasada' || e === 'bloqueada' || e === 'horas' || e === 'citas' || e === 'bloqueo'; }
   /** "3/6 h · 2/4 citas" de una franja */
   function textoOcupacion(o){ return o.horas + '/' + DATOS.ajustes.limiteHoras + ' h · ' + o.citas + '/' + DATOS.ajustes.tope + ' citas'; }
   /** El día no se ofrece en la web solo si mañana y tarde están cerradas. */
@@ -259,14 +307,14 @@
     if (!franjaCerrada(m) || !franjaCerrada(t)) return '';
     return m === t ? (m === 'bloqueada' ? 'manual' : m) : 'mixto';
   }
-  var TEXTO_ESTADO = { bloqueada: 'bloqueada a mano', abierta: 'abierta a mano', horas: 'llena por horas', citas: 'llena por citas', pasada: 'ya pasó', libre: 'disponible' };
+  var TEXTO_ESTADO = { bloqueo: 'espacio bloqueado', bloqueada: 'bloqueada a mano', abierta: 'abierta a mano', horas: 'llena por horas', citas: 'llena por citas', pasada: 'ya pasó', libre: 'disponible' };
   /** Resumen corto para el encabezado del día en la Agenda. */
   function resumenDisponibilidad(f){
     if (f < DATOS.hoy) return '';
     var m = estadoFranja(f, 'manana'), t = estadoFranja(f, 'tarde');
     if (m === t) {
       if (m === 'libre') return '';
-      var txt = { bloqueada: 'Bloqueado a mano', abierta: 'Abierto a mano', horas: 'Lleno por horas', citas: 'Lleno por citas', pasada: 'Ya cerró por hoy' }[m];
+      var txt = { bloqueo: 'Espacio bloqueado', bloqueada: 'Bloqueado a mano', abierta: 'Abierto a mano', horas: 'Lleno por horas', citas: 'Lleno por citas', pasada: 'Ya cerró por hoy' }[m];
       return '<small class="' + (m === 'abierta' ? 'abierto' : 'llena') + '">' + txt + '</small>';
     }
     return FRANJAS.map(function(x){
@@ -310,23 +358,43 @@
   function reservaPorId(id){ return DATOS.reservas.filter(function(r){ return r.id === id; })[0]; }
   function sinHora(fecha){
     return DATOS.reservas.filter(function(r){
-      return (r.estado === 'pago_por_validar' || r.estado === 'pago_aprobado') && r.fecha_solicitada === fecha;
+      return (r.estado === 'pago_por_validar' || r.estado === 'pago_aprobado' || r.estado === 'requiere_aprobacion') && r.fecha_solicitada === fecha;
     });
   }
   // Cambios locales en la agenda (se ven al instante; el servidor confirma después).
   function quitarEventos(id){ Object.keys(CACHE).forEach(function(f){ CACHE[f] = CACHE[f].filter(function(e){ return e.reserva !== id; }); }); }
   function ponerEvento(r){
     quitarEventos(r.id);
-    (CACHE[r.fecha_cita] = CACHE[r.fecha_cita] || []).push({ titulo: r.servicio + ' · ' + r.nombre, fecha: r.fecha_cita, ini: r.hora_inicio, fin: r.hora_fin,
+    (CACHE[r.fecha_cita] = CACHE[r.fecha_cita] || []).push({ id: r.evento_id || '', titulo: r.servicio + ' · ' + r.nombre, fecha: r.fecha_cita, ini: r.hora_inicio, fin: r.hora_fin,
       reserva: r.id, estado: r.estado, nombre: r.nombre, servicio: r.servicio, celular: r.celular });
   }
   function estadoEvento(id, estado){ Object.keys(CACHE).forEach(function(f){ CACHE[f].forEach(function(e){ if (e.reserva === id) e.estado = estado; }); }); }
 
   // ---------------------------------------------------------------- pestañas
+  /** Reserva web que se agendó sola y el salón todavía no revisó (ajustar duración real). */
+  function porRevisar(r){ return r.estado === 'cita_confirmada' && !r.revisada && r.origen === 'web'; }
   function enTab(r, tab){
-    if (tab === 'por_agendar') return r.estado === 'pago_aprobado' || r.estado === 'dia_saturado' || r.estado === 'cita_agendada';
+    if (tab === 'requiere_aprobacion') return r.estado === 'requiere_aprobacion' || r.estado === 'pago_por_validar';
+    if (tab === 'por_agendar') return r.estado === 'pago_aprobado' || r.estado === 'dia_saturado' || r.estado === 'cita_agendada' || porRevisar(r);
+    if (tab === 'cita_confirmada') return r.estado === 'cita_confirmada' && !porRevisar(r);
     if (tab === 'historial') return ['pago_rechazado', 'cancelada', 'completada', 'no_asistio'].indexOf(r.estado) >= 0;
     return r.estado === tab;
+  }
+  function soloDigitos(t){ return String(t || '').replace(/\D/g, ''); }
+  function sinTildes(t){ return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+  /** Búsqueda por nombre, correo, teléfono y fecha (solicitada o en calendario). */
+  function pasaFiltro(r){
+    if (FILTRO.fecha && r.fecha_solicitada !== FILTRO.fecha && r.fecha_cita !== FILTRO.fecha) return false;
+    var q = sinTildes(FILTRO.texto).trim();
+    if (!q) return true;
+    var dq = soloDigitos(q);
+    return sinTildes(r.nombre).indexOf(q) >= 0 || sinTildes(r.correo).indexOf(q) >= 0 || sinTildes(r.servicio).indexOf(q) >= 0 ||
+      (dq.length >= 3 && soloDigitos(r.celular).indexOf(dq) >= 0) || String(r.id).toLowerCase().indexOf(q) >= 0;
+  }
+  function limpiarFiltro(){
+    FILTRO = { texto: '', fecha: '' };
+    document.getElementById('buscar').value = ''; document.getElementById('buscarFecha').value = '';
+    pintar();
   }
   function pintarTabs(){
     document.getElementById('tabs').innerHTML = TABS.map(function(t){
@@ -340,10 +408,13 @@
     calcularCarga();
     document.querySelector('main').classList.toggle('ancho', TAB === 'agenda');
     pintarTabs();
+    document.getElementById('filtros').classList.toggle('oculto', TAB === 'agenda');
     if (TAB === 'agenda') return pintarAgenda();
-    var lista = DATOS.reservas.filter(function(r){ return enTab(r, TAB); });
-    if (TAB === 'cita_confirmada') lista.sort(function(a,b){ return (a.fecha_cita + a.hora_inicio).localeCompare(b.fecha_cita + b.hora_inicio); });
-    document.getElementById('lista').innerHTML = lista.length ? lista.map(tarjeta).join('') : '<p class="vacio">No hay reservas en esta sección.</p>';
+    var lista = DATOS.reservas.filter(function(r){ return enTab(r, TAB) && pasaFiltro(r); });
+    if (TAB === 'cita_confirmada' || TAB === 'por_agendar') lista.sort(function(a,b){ return ((a.fecha_cita || a.fecha_solicitada) + a.hora_inicio).localeCompare((b.fecha_cita || b.fecha_solicitada) + b.hora_inicio); });
+    var filtrando = FILTRO.texto || FILTRO.fecha;
+    document.getElementById('lista').innerHTML = lista.length ? lista.map(tarjeta).join('') :
+      '<p class="vacio">' + (filtrando ? 'Ninguna reserva de esta sección coincide con la búsqueda.' : 'No hay reservas en esta sección.') + '</p>';
     lista.forEach(function(r){ var f = document.getElementById('f-' + r.id); if (f && !f.classList.contains('oculto')) pintarPrevia(r.id); });
   }
   function irAReserva(id){
@@ -356,7 +427,12 @@
   }
 
   // ---------------------------------------------------------------- columna de un día (agenda y vista previa)
-  function claseEvento(e){ return (e.estado === 'cita_confirmada' || e.estado === 'completada') ? 'ok' : (e.estado === 'cita_agendada' ? 'pend' : 'ext'); }
+  function claseEvento(e){
+    if (e.bloqueo) return 'bloq';
+    var r = e.reserva && reservaPorId(e.reserva);
+    if (r && porRevisar(r)) return 'pend';
+    return (e.estado === 'cita_confirmada' || e.estado === 'completada') ? 'ok' : (e.estado === 'cita_agendada' ? 'pend' : 'ext');
+  }
 
   /** Reparte los eventos que se cruzan en carriles lado a lado. */
   function carriles(evs){
@@ -421,7 +497,8 @@
       '<button class="btn sec" onclick="moverSemana(7)">›</button>' +
       '<button class="btn sec" onclick="pedirAjustes()" title="Horas y reservas que cierran un día">Ajustes</button></div></div>' +
       '<div class="leyenda"><span><i style="background:#e3efe0;border-left:3px solid var(--ok)"></i>Confirmada</span>' +
-      '<span><i style="background:#f5ecd6;border-left:3px solid var(--warn)"></i>Falta confirmar</span>' +
+      '<span><i style="background:#f5ecd6;border-left:3px solid var(--warn)"></i>Por revisar duración</span>' +
+      '<span><i style="background:#dcd9d4;border-left:3px solid #6b6762"></i>Espacio bloqueado</span>' +
       '<span><i style="background:#ecebe8;border-left:3px solid var(--muted)"></i>Otro evento</span></div>' +
       '<div class="semana-scroll"><div class="semana" style="grid-template-columns:34px repeat(' + dias.length + ', minmax(0, 1fr))">';
 
@@ -441,14 +518,19 @@
     h += '<div class="extras" style="border-left:0"></div>';
     dias.forEach(function(f){
       h += '<div class="extras">' +
-        (CACHE[f] || []).filter(function(e){ return e.todoElDia; }).map(function(e){ return '<div title="Todo el día">' + esc(e.titulo) + '</div>'; }).join('') +
+        (CACHE[f] || []).filter(function(e){ return e.todoElDia; }).map(function(e){
+          var n = VISTA.push(e) - 1;
+          return '<div' + (e.bloqueo ? ' class="bloq"' : '') + ' onclick="verEvento(' + n + ')" title="Todo el día">' + esc(e.titulo) + '</div>';
+        }).join('') +
         sinHora(f).map(function(r){
-          return '<div onclick="irAReserva(\'' + r.id + '\')" title="Solicitada, todavía sin hora">Sin hora · ' + esc(nombreCorto(r.nombre)) + '</div>';
+          var txt = r.estado === 'requiere_aprobacion' ? 'Por aprobar · ' : 'Sin hora · ';
+          return '<div onclick="irAReserva(\'' + r.id + '\')" title="Todavía no está en el calendario">' + txt + esc(nombreCorto(r.nombre)) + (r.hora_solicitada ? ' ' + hCorta(r.hora_solicitada) : '') + '</div>';
         }).join('') + '</div>';
     });
     h += gutter();
     dias.forEach(function(f){ h += columna(f, CACHE[f] || []); });
-    cont.innerHTML = h + '</div></div><p class="nota">Se actualiza sola cada minuto. Toca una cita para ver el detalle. Domingo y lunes en gris: cerrado para reservas en línea.</p>';
+    cont.innerHTML = h + '</div></div><p class="nota">Se actualiza sola cada minuto. Toca una cita para ver el detalle. Domingo y lunes en gris: cerrado para reservas en línea. ' +
+      'Usa <b>+ Cita</b> para agregar una cita y <b>Bloquear</b> para apartar un espacio sin clienta (vacaciones, ausencias).</p>';
   }
   function moverSemana(n){ SEMANA = sumaDias(SEMANA, n); pintarAgenda(); }
 
@@ -465,12 +547,19 @@
         (r.comentarios ? '<div class="fila"><span>Comentarios</span>' + esc(r.comentarios) + '</div>' : '') +
         '<div class="acciones">' +
           (r.estado === 'cita_agendada' ? '<button class="btn ok" onclick="cerrarModal();confirmar(\'' + r.id + '\')">Confirmar y enviar correo</button>' : '') +
-          '<a class="btn sec" href="https://wa.me/' + String(r.celular).replace(/\D/g,'') + '" target="_blank">WhatsApp</a>' +
+          (porRevisar(r) ? '<button class="btn ok" onclick="cerrarModal();revisada(\'' + r.id + '\')">Horario correcto</button>' : '') +
+          botonWhatsApp(r) +
           '<button class="btn sec" onclick="irAReserva(\'' + r.id + '\')">Ver reserva</button>' +
           '<button class="btn sec" onclick="pedirMover(\'' + r.id + '\')">Mover a…</button>' +
           '<button class="btn sec" onclick="cerrarModal()">Cerrar</button>' +
           '<button class="btn-eliminar" onclick="pedirEliminar(\'' + r.id + '\')">Eliminar</button>' +
         '</div>';
+    } else if (e.bloqueo) {
+      h = '<span class="chip">Espacio bloqueado</span><h3>' + esc(e.titulo) + '</h3>' +
+        '<div class="fila"><span>Cuándo</span>' + fechaLarga(e.fecha) + (e.todoElDia ? ' · todo el día' : ' · ' + h12(e.ini) + '–' + h12(e.fin)) + '</div>' +
+        '<p class="nota">Bloqueo interno: no se envía nada a nadie y la web no ofrece ese espacio.</p>' +
+        '<div class="acciones"><button class="btn bad" onclick="quitarBloqueoPanel(\'' + esc(e.id) + '\')">Quitar bloqueo</button>' +
+        '<button class="btn sec" onclick="cerrarModal()">Cerrar</button></div>';
     } else {
       h = '<span class="chip">Google Calendar</span><h3>' + esc(e.titulo) + '</h3>' +
         '<div class="fila"><span>Cuándo</span>' + fechaLarga(e.fecha) + ' · ' + h12(e.ini) + '–' + h12(e.fin) + '</div>' +
@@ -548,7 +637,7 @@
     procesarCola();
   }
 
-  function cerrarModal(){ document.getElementById('modal').classList.remove('abierto'); }
+  function cerrarModal(){ document.getElementById('modal').classList.remove('abierto'); document.getElementById('hoja').className = 'hoja'; }
 
   // ---------------------------------------------------------------- tarjetas
   function textoCarga(fecha){
@@ -557,8 +646,9 @@
     return '<div class="carga' + (franjaCerrada(m) || franjaCerrada(t) ? ' llena' : '') + '">Ese día · <b>mañana</b> ' + textoOcupacion(oc.manana) + ' (' + TEXTO_ESTADO[m] + ')' +
       ' · <b>tarde</b> ' + textoOcupacion(oc.tarde) + ' (' + TEXTO_ESTADO[t] + '). Tú decides si agendar igual.</div>';
   }
-  function chipEstado(e){
-    var m = { pago_por_validar:['Pago por validar','warn'], pago_aprobado:['Pago aprobado · por agendar','ok'], dia_saturado:['Día saturado · contactar','warn'],
+  function chipEstado(e, r){
+    if (r && porRevisar(r)) return '<span class="chip warn">Agendada · revisar duración</span>';
+    var m = { requiere_aprobacion:['Requiere aprobación','warn'], pago_por_validar:['Pago por validar','warn'], pago_aprobado:['Pago aprobado · por agendar','ok'], dia_saturado:['Día saturado · contactar','warn'],
               cita_agendada:['En calendario · falta confirmar','warn'], cita_confirmada:['Cita confirmada','ok'],
               pago_rechazado:['Pago rechazado','bad'], cancelada:['Cancelada','bad'],
               completada:['Completada','ok'], no_asistio:['No asistió','bad'] }[e] || [e,''];
@@ -567,18 +657,22 @@
 
   function formAgendar(r, visible){
     var fecha = r.fecha_cita || r.fecha_solicitada;
-    var ini = r.hora_inicio || (r.franja === 'Tarde' ? '13:00' : '09:00');
+    var ini = r.hora_inicio || r.hora_solicitada || (r.franja === 'Tarde' ? '13:00' : '09:00');
     var fin = r.hora_fin || sumarHoras(ini, Number(r.dur_max_h) || 2);
-    var titulo = r.estado === 'cita_confirmada' ? 'Mover la cita' : (r.estado === 'cita_agendada' ? 'Cambiar fecha u hora' : 'Paso 1 · Elegir fecha y hora');
+    var nuevo = r.estado === 'cita_confirmada';   // flujo nuevo: ajustar horario (avisa solo si cambia fecha o inicio)
+    var titulo = porRevisar(r) ? 'Ajustar fecha y duración' : (r.estado === 'cita_confirmada' ? 'Mover la cita' : (r.estado === 'cita_agendada' ? 'Cambiar fecha u hora' : 'Paso 1 · Elegir fecha y hora'));
     return '<div class="paso' + (visible ? '' : ' oculto') + '" id="f-' + r.id + '"><h4>' + titulo + '</h4><div class="agendar"><div>' +
       '<div class="campos">' +
         '<div><label>Fecha</label><input type="date" id="fe-' + r.id + '" value="' + fecha + '" oninput="pintarPrevia(\'' + r.id + '\')"></div>' +
         '<div><label>Inicio</label><input type="time" id="hi-' + r.id + '" value="' + ini + '" step="900" oninput="pintarPrevia(\'' + r.id + '\')"></div>' +
         '<div><label>Fin</label><input type="time" id="hf-' + r.id + '" value="' + fin + '" step="900" oninput="pintarPrevia(\'' + r.id + '\')"></div>' +
       '</div><div id="cg-' + r.id + '">' + textoCarga(fecha) + '</div>' +
-      '<div class="acciones"><button class="btn" onclick="agendar(\'' + r.id + '\')">Poner en Google Calendar</button></div>' +
-      '<p class="nota">Todavía no se le avisa a la clienta: primero revisa cómo queda el día' +
-        (r.estado === 'cita_confirmada' ? '. Después de moverla tendrás que confirmarla de nuevo para enviarle la nueva hora.' : '.') + '</p>' +
+      (nuevo
+        ? '<div class="acciones"><button class="btn" onclick="ajustar(\'' + r.id + '\')">Guardar horario</button></div>' +
+          '<p class="nota">Si solo cambias la hora de <b>fin</b> (duración real), no se le avisa a la clienta: solo se libera o se toma espacio. ' +
+          'Si cambias la <b>fecha</b> o la hora de <b>inicio</b>, le llega el aviso con la nueva hora por WhatsApp y correo.</p>'
+        : '<div class="acciones"><button class="btn" onclick="agendar(\'' + r.id + '\')">Poner en Google Calendar</button></div>' +
+          '<p class="nota">Todavía no se le avisa a la clienta: primero revisa cómo queda el día.</p>') +
       '</div><div id="pv-' + r.id + '"></div></div></div>';
   }
 
@@ -586,22 +680,41 @@
     var h = '<div class="card" id="c-' + r.id + '">' +
       '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start">' +
         '<div style="display:flex;gap:10px;align-items:center"><span class="manija" draggable="true" title="Arrastra a otra pestaña para moverla" ondragstart="empezarArrastre(event,\'' + r.id + '\')" ondragend="terminarArrastre()">⠿</span><h3>' + esc(r.nombre) + '</h3></div>' +
-        '<div>' + chipEstado(r.estado) + (r.requiere_aprobacion ? ' <span class="chip warn" title="Completa una combinación de la matriz de reglas">Requiere aprobación</span>' : '') + '</div></div>' +
-      '<p class="meta">' + esc(r.servicio) + ' · ' + esc(r.categoria) + ' · largo ' + esc(r.largo) + ' · reserva ' + esc(r.id) + '</p>' +
+        '<div>' + chipEstado(r.estado, r) + (r.origen === 'manual' ? ' <span class="chip">Cita manual</span>' : '') + '</div></div>' +
+      '<p class="meta">' + esc(r.servicio) + ' · ' + esc(r.categoria) + (r.largo ? ' · largo ' + esc(r.largo) : '') + ' · reserva ' + esc(r.id) + '</p>' +
       '<div class="grid">' +
-        '<div><span>Fecha solicitada</span>' + fechaLarga(r.fecha_solicitada) + ' · ' + esc(r.franja) + '</div>' +
+        '<div><span>Fecha solicitada</span>' + fechaLarga(r.fecha_solicitada) + ' · ' + (r.hora_solicitada ? h12(r.hora_solicitada) : esc(r.franja)) + '</div>' +
         ((r.estado==='cita_confirmada' || r.estado==='cita_agendada' || ((r.estado==='completada' || r.estado==='no_asistio') && r.fecha_cita)) ? '<div><span>En calendario</span>' + fechaLarga(r.fecha_cita) + ' · ' + h12(r.hora_inicio) + '–' + h12(r.hora_fin) + '</div>' : '') +
         '<div><span>Depósito</span>' + (Number(r.deposito)>0 ? colones(r.deposito) : 'No requiere') + '</div>' +
-        '<div><span>Descripción esperada SINPE</span>' + esc(r.descripcion_sinpe || '—') + '</div>' +
+        (r.descripcion_sinpe ? '<div><span>Descripción esperada SINPE</span>' + esc(r.descripcion_sinpe) + '</div>' : '') +
         '<div><span>Celular</span><a class="link" href="https://wa.me/' + String(r.celular).replace(/\D/g,'') + '" target="_blank">' + esc(r.celular) + '</a></div>' +
-        '<div><span>Correo</span>' + esc(r.correo) + '</div>' +
+        '<div><span>Correo</span>' + esc(r.correo || '—') + '</div>' +
+        (r.tipo_cliente ? '<div><span>Tipo de cliente</span>' + (r.tipo_cliente === 'nuevo' ? 'Nueva' : 'Regular') + '</div>' : '') +
+        (r.expectativas ? '<div><span>Resultado que espera</span>' + esc(r.expectativas) + '</div>' : '') +
         '<div><span>Duración estimada</span>' + (r.dur_min_h ? r.dur_min_h + '–' + r.dur_max_h + ' h' : 'Por confirmar') + '</div>' +
-        '<div><span>Horario sugerido</span>' + esc(r.horario_sugerido || '—') + '</div>' +
         (r.comentarios ? '<div><span>Comentarios</span>' + esc(r.comentarios) + '</div>' : '') +
         (r.motivo ? '<div><span>Motivo / nota</span>' + esc(r.motivo) + '</div>' : '') +
       '</div>';
 
-    if (r.comprobante_url) h += '<p style="margin-bottom:12px"><a class="link" href="' + esc(r.comprobante_url) + '" target="_blank">Ver comprobante →</a></p>';
+    var nFotos = String(r.fotos_ids || '').split(',').filter(String).length;
+    if (r.comprobante_url || nFotos) h += '<p style="margin-bottom:12px;display:flex;gap:18px;flex-wrap:wrap">' +
+      (r.comprobante_url ? '<a class="link" href="' + esc(r.comprobante_url) + '" target="_blank">Ver comprobante →</a>' : '') +
+      (nFotos ? '<a class="link" href="#" onclick="verFotos(\'' + r.id + '\');return false">Ver fotos del cabello (' + nFotos + ') →</a>' : '') + '</p>';
+
+    if (r.estado === 'requiere_aprobacion') {
+      h += '<div class="en-cal">Pidió el <b>' + fechaLarga(r.fecha_solicitada) + '</b> a las ' + h12(r.hora_solicitada || '09:00') +
+        '. Completa una combinación de la matriz que necesita aprobación. Al aprobarla se agenda a esa hora y le llega la confirmación.</div>' +
+        '<div class="acciones">' +
+        '<button class="btn ok" onclick="aprobarRes(\'' + r.id + '\')">Aprobar y agendar</button>' +
+        '<button class="btn sec" onclick="abrir(\'' + r.id + '\')">Ver el día</button>' +
+        '<button class="btn bad" onclick="noAprobar(\'' + r.id + '\')">No aprobar</button></div>' + formPrevia(r);
+    }
+    if (porRevisar(r)) {
+      h += '<div class="paso"><h4>Revisar duración</h4>' +
+        '<div class="en-cal">Se agendó sola en Google Calendar el <b>' + fechaLarga(r.fecha_cita) + '</b>, de ' + h12(r.hora_inicio) + ' a ' + h12(r.hora_fin) +
+        ' (duración estimada). Ajusta la hora de fin según la duración real; la clienta ya recibió su confirmación.</div>' +
+        '<div class="acciones"><button class="btn ok" onclick="revisada(\'' + r.id + '\')">Horario correcto</button></div></div>' + formAgendar(r, true);
+    }
 
     if (r.estado === 'pago_por_validar') {
       h += '<div class="acciones">' +
@@ -622,7 +735,7 @@
           '<button class="btn sec" onclick="saturado(\'' + r.id + '\')">Día saturado</button>' +
         '</div></div>' + formAgendar(r, false);
     }
-    if (r.estado === 'cita_confirmada') {
+    if (r.estado === 'cita_confirmada' && !porRevisar(r)) {
       h += '<div class="acciones">' +
         '<button class="btn ok" onclick="cambiar(\'' + r.id + '\',\'completada\')">Completada</button>' +
         '<button class="btn sec" onclick="cambiar(\'' + r.id + '\',\'no_asistio\')">No asistió</button>' +
@@ -631,16 +744,93 @@
     if (r.estado === 'completada' || r.estado === 'no_asistio') {
       h += '<div class="acciones"><button class="btn sec" onclick="cambiar(\'' + r.id + '\',\'cita_confirmada\')">Volver a confirmadas</button></div>';
     }
-    if (r.estado === 'pago_rechazado' || r.estado === 'cancelada') {
-      h += '<div class="acciones"><button class="btn sec" onclick="cambiar(\'' + r.id + '\',\'pago_por_validar\')">Reabrir (volver a pagos por validar)</button></div>';
+    if (r.estado === 'pago_rechazado') {
+      h += '<div class="acciones"><button class="btn sec" onclick="cambiar(\'' + r.id + '\',\'pago_por_validar\')">Reabrir</button></div>';
+    }
+    if (r.estado === 'cancelada' && r.origen === 'web') {
+      h += '<div class="acciones"><button class="btn sec" onclick="cambiar(\'' + r.id + '\',\'requiere_aprobacion\')">Reabrir (requiere aprobación)</button></div>';
     }
     if (r.historial) h += '<div class="historial">' + esc(r.historial) + '</div>';
-    h += '<div class="pie"><button class="btn-mover" onclick="pedirMover(\'' + r.id + '\')">Mover a…</button>' +
+    h += '<div class="pie">' + botonWhatsApp(r, 'btn-mover') +
+      '<button class="btn-mover" onclick="verCliente(\'' + r.id + '\')">Historial de la clienta</button>' +
+      '<button class="btn-mover" onclick="pedirMover(\'' + r.id + '\')">Mover a…</button>' +
       '<button class="btn-eliminar" onclick="pedirEliminar(\'' + r.id + '\')">Eliminar</button></div>';
     return h + '</div>';
   }
 
   function abrir(id){ document.getElementById('f-' + id).classList.toggle('oculto'); pintarPrevia(id); }
+  /** Vista del día pedido (solo lectura) para decidir si se aprueba. */
+  function formPrevia(r){
+    var ini = r.hora_solicitada || '09:00';
+    return '<div class="paso oculto" id="f-' + r.id + '"><h4>Así quedaría el día</h4><div class="agendar"><div>' +
+      '<input type="hidden" id="fe-' + r.id + '" value="' + r.fecha_solicitada + '">' +
+      '<input type="hidden" id="hi-' + r.id + '" value="' + ini + '">' +
+      '<input type="hidden" id="hf-' + r.id + '" value="' + sumarHoras(ini, Number(r.dur_max_h) || Number(r.dur_min_h) || 2) + '">' +
+      '<div id="cg-' + r.id + '"></div></div><div id="pv-' + r.id + '"></div></div></div>';
+  }
+
+  /** Mensaje de WhatsApp listo para enviar a mano (mientras no esté conectada la API, o para cualquier consulta). */
+  function textoWhatsApp(r){
+    var nombre = nombreCorto(r.nombre);
+    var cuando = r.fecha_cita ? fechaLarga(r.fecha_cita) + ' a las ' + h12(r.hora_inicio) : fechaLarga(r.fecha_solicitada) + (r.hora_solicitada ? ' a las ' + h12(r.hora_solicitada) : '');
+    if (r.estado === 'requiere_aprobacion') return '¡Hola ' + nombre + '! Te escribimos de Amarë Beauty Center por tu reserva de ' + r.servicio + ' para el ' + cuando + '.';
+    if (r.estado === 'cita_confirmada') return '¡Hola ' + nombre + '! Tu cita de ' + r.servicio + ' en Amarë Beauty Center está confirmada para el ' + cuando +
+      '. Te esperamos en Calle 42, San José, Santa Ana (LOCAL COLOR BLANCO a mano izquierda, contiguo a Minisuper AMD).';
+    return '¡Hola ' + nombre + '! Te escribimos de Amarë Beauty Center.';
+  }
+  function botonWhatsApp(r, clase){
+    var tel = soloDigitos(r.celular); if (!tel) return '';
+    if (tel.length === 8) tel = '506' + tel;
+    return '<a class="' + (clase || 'btn sec') + '" href="https://wa.me/' + tel + '?text=' + encodeURIComponent(textoWhatsApp(r)) + '" target="_blank">WhatsApp</a>';
+  }
+
+  /** Visor de las fotos del cabello (se leen de Drive solo al abrirlo). */
+  function verFotos(id){
+    var r = reservaPorId(id); if (!r) return;
+    document.getElementById('hoja').className = 'hoja ancha';
+    document.getElementById('hoja').innerHTML = '<span class="chip">Fotos del cabello</span><h3>' + esc(r.nombre) + '</h3>' +
+      (r.expectativas ? '<div class="fila"><span>Resultado que espera</span>' + esc(r.expectativas) + '</div>' : '') +
+      '<div class="fotos" id="fotosVisor"><p class="nota">Cargando fotos…</p></div>' +
+      '<div class="acciones"><button class="btn sec" onclick="cerrarModal()">Cerrar</button></div>';
+    document.getElementById('modal').classList.add('abierto');
+    google.script.run.withSuccessHandler(function(fotos){
+      var c = document.getElementById('fotosVisor'); if (!c) return;
+      c.innerHTML = fotos.length ? fotos.map(function(f){
+        return f.url ? '<a href="' + esc(f.drive || f.url) + '" target="_blank" title="Abrir en Drive"><img src="' + f.url + '" alt="' + esc(f.nombre) + '"></a>' : '<p class="nota">' + esc(f.nombre) + '</p>';
+      }).join('') : '<p class="nota">Esta reserva no tiene fotos.</p>';
+    }).withFailureHandler(function(e){ var c = document.getElementById('fotosVisor'); if (c) c.innerHTML = '<p class="nota">' + esc(e.message) + '</p>'; }).fotosReserva(id);
+  }
+
+  /** Historial de la clienta: todas sus reservas (mismo celular o correo), procedimientos y última visita. */
+  function verCliente(id){
+    var r = reservaPorId(id); if (!r) return;
+    var tel = soloDigitos(r.celular).slice(-8), correo = String(r.correo || '').toLowerCase();
+    var suyas = DATOS.reservas.filter(function(x){
+      return (tel.length === 8 && soloDigitos(x.celular).slice(-8) === tel) || (correo && String(x.correo || '').toLowerCase() === correo);
+    }).sort(function(a, b){ return String(b.fecha_cita || b.fecha_solicitada).localeCompare(String(a.fecha_cita || a.fecha_solicitada)); });
+    var visitas = suyas.filter(function(x){ return x.estado === 'completada'; });
+    var ultimaVisita = visitas[0], ultimaReserva = suyas.slice().sort(function(a, b){ return String(b.creado).localeCompare(String(a.creado)); })[0];
+    var procs = {};
+    visitas.forEach(function(x){ procs[x.servicio] = (procs[x.servicio] || 0) + 1; });
+    document.getElementById('hoja').className = 'hoja ancha';
+    document.getElementById('hoja').innerHTML = '<span class="chip">Historial de la clienta</span><h3>' + esc(r.nombre) + '</h3>' +
+      '<div class="fila"><span>Contacto</span>' + esc(r.celular || '—') + ' · ' + esc(r.correo || '—') + '</div>' +
+      '<div class="resumen-cli">' +
+        '<div><span>Reservas</span>' + suyas.length + '</div>' +
+        '<div><span>Visitas completadas</span>' + visitas.length + '</div>' +
+        '<div><span>Última visita</span>' + (ultimaVisita ? fechaCorta(ultimaVisita.fecha_cita || ultimaVisita.fecha_solicitada) : '—') + '</div>' +
+        '<div><span>Última reserva</span>' + (ultimaReserva && ultimaReserva.creado ? fechaCorta(String(ultimaReserva.creado).slice(0, 10)) : '—') + '</div>' +
+      '</div>' +
+      (Object.keys(procs).length ? '<div class="fila"><span>Procedimientos realizados</span>' + Object.keys(procs).map(function(k){ return esc(k) + (procs[k] > 1 ? ' ×' + procs[k] : ''); }).join(' · ') + '</div>' : '') +
+      '<div style="margin-top:12px">' + suyas.map(function(x){
+        var f = x.fecha_cita || x.fecha_solicitada;
+        return '<div class="hist-item"><b>' + esc(x.servicio) + '</b> · ' + (f ? fechaCorta(f) : '—') + ' ' + chipEstado(x.estado, x) +
+          '<small>' + esc(x.categoria) + (x.largo ? ' · largo ' + esc(x.largo) : '') + ' · ' + esc(x.id) + '</small></div>';
+      }).join('') + '</div>' +
+      '<p class="nota">Se agrupa por el mismo celular o correo. Las reservas eliminadas no aparecen.</p>' +
+      '<div class="acciones"><button class="btn sec" onclick="cerrarModal()">Cerrar</button></div>';
+    document.getElementById('modal').classList.add('abierto');
+  }
 
   /** Vista previa del día elegido con la cita propuesta encima de lo que ya hay en Calendar. */
   function pintarPrevia(id){
@@ -662,17 +852,26 @@
    * Aplica el cambio en pantalla de inmediato y lo manda al servidor en una cola (una acción a la vez,
    * para que nunca se pisen). Si el servidor falla, se avisa y se recarga el panel con los datos reales.
    */
-  function accion(id, fn, args, cambios, textoYa, textoListo){
+  function accion(id, fn, args, cambios, textoYa, textoListo, avisa){
     var r = reservaPorId(id); if (!r) return;
     Object.keys(cambios).forEach(function(k){ r[k] = cambios[k]; });
-    if (r.estado === 'cita_agendada' && cambios.fecha_cita) ponerEvento(r);
+    if ((r.estado === 'cita_agendada' || r.estado === 'cita_confirmada') && cambios.fecha_cita) ponerEvento(r);
     else if (cambios.estado === 'cita_confirmada') estadoEvento(id, 'cita_confirmada');
-    else if (cambios.estado === 'dia_saturado' || cambios.estado === 'cancelada' || cambios.estado === 'pago_por_validar') quitarEventos(id);
+    else if (cambios.estado === 'dia_saturado' || cambios.estado === 'cancelada' || cambios.estado === 'pago_por_validar' || cambios.estado === 'requiere_aprobacion') quitarEventos(id);
     else if (cambios.estado) estadoEvento(id, cambios.estado);
     pintar();
     aviso(textoYa);
-    COLA.push({ id: id, fn: fn, args: args, textoListo: textoListo });
+    COLA.push({ id: id, fn: fn, args: args, textoListo: textoListo, avisa: avisa });
     procesarCola();
+  }
+  /** Texto según por dónde salió el aviso a la clienta ('correo+whatsapp', 'correo', 'whatsapp' o ''). */
+  function textoAviso(canales, r){
+    if (canales === false) return { t: 'Guardado, pero el correo a la clienta NO salió. Revisa EmailJS.', error: true };
+    if (!canales) return { t: 'Guardado, pero no salió ningún aviso automático. Escríbele con el botón WhatsApp.', error: true };
+    var partes = canales.split('+');
+    var t = 'Guardado ✓ Aviso enviado por ' + partes.join(' y ') + '.';
+    if (partes.indexOf('whatsapp') < 0 && r && r.celular) t += DATOS.whatsappApi ? ' El WhatsApp no salió: usa el botón WhatsApp.' : ' (WhatsApp automático aún no conectado: usa el botón WhatsApp.)';
+    return { t: t, error: false };
   }
   function procesarCola(){
     pintarSync();
@@ -683,11 +882,14 @@
       .withSuccessHandler(function(res){
         var r = reservaPorId(t.id);
         if (r && res && res.reserva) Object.keys(res.reserva).forEach(function(k){ r[k] = res.reserva[k]; });
+        if (t.nueva && res && res.reserva) { DATOS.reservas.unshift(res.reserva); r = res.reserva; if (r.fecha_cita) ponerEvento(r); }
         if (res && res.modos) DATOS.modos = res.modos;                    // bloquearDia
         if (res && res.limiteHoras) DATOS.ajustes = res;                     // guardarAjustes
         OCUPADO = false;
-        if (res && res.correo === false) aviso('Guardado, pero el correo a la clienta NO salió. Revisa EmailJS.', true);
+        if (t.avisa && res && 'correo' in res && res.correo !== null) { var a = textoAviso(res.correo, r); aviso(a.t, a.error); }
+        else if (res && res.correo === false) aviso('Guardado, pero el correo a la clienta NO salió. Revisa EmailJS.', true);
         else if (t.textoListo) aviso(t.textoListo);
+        if (t.recargar) { CACHE = {}; }
         if (!editando() && !COLA.length) pintar();
         procesarCola();
       })
@@ -731,17 +933,20 @@
   }
 
   // ---------------------------------------------------------------- mover entre pestañas
-  var NOMBRE_TAB = { pago_por_validar: 'Pagos por validar', por_agendar: 'Por agendar', cita_confirmada: 'Confirmadas', historial: 'Historial' };
+  var NOMBRE_TAB = { requiere_aprobacion: 'Requiere aprobación', por_agendar: 'Por agendar', cita_confirmada: 'Confirmadas', historial: 'Historial' };
 
   /** Qué se puede hacer al llevar una reserva a una pestaña. Cada opción dice si envía correo. */
   function opcionesMover(r, tab){
     var id = r.id, o = [], e = r.estado;
     function op(texto, nota, fn, clase){ o.push({ texto: texto, nota: nota, fn: fn, clase: clase || '' }); }
     if (tab === 'por_agendar') {
+      if (e === 'requiere_aprobacion') op('Aprobar y agendar', 'Se agenda a la hora que pidió y se le envía la confirmación (WhatsApp y correo).', function(){ aprobarRes(id); }, 'ok');
       if (e === 'pago_por_validar') op('Aprobar pago', 'Se le envía el correo "pago confirmado".', function(){ aprobar(id); });
-      if (e === 'cita_confirmada') op('Cambiar fecha u hora', 'Abre el formulario para moverla.', function(){ irAReserva(id); abrir(id); }, 'sec');
+      if (e === 'cita_confirmada' && !porRevisar(r)) op('Cambiar fecha u hora', 'Abre el formulario para moverla.', function(){ irAReserva(id); abrir(id); }, 'sec');
     }
     if (tab === 'cita_confirmada') {
+      if (porRevisar(r)) op('Horario correcto', 'Pasa a Confirmadas sin cambiar nada. Sin aviso.', function(){ revisada(id); }, 'ok');
+      if (e === 'requiere_aprobacion') op('Aprobar y agendar', 'Se agenda a la hora que pidió y se le envía la confirmación (WhatsApp y correo).', function(){ aprobarRes(id); }, 'ok');
       if (e === 'cita_agendada') op('Confirmar cita', 'Se le envía el correo "cita confirmada".', function(){ confirmar(id); }, 'ok');
       if (e === 'pago_aprobado' || e === 'dia_saturado') return { motivo: 'Primero ponle fecha y hora en "Por agendar" (Paso 1).' };
       if ((e === 'completada' || e === 'no_asistio') && r.fecha_cita) op('Volver a confirmadas', 'Sin correo.', function(){ cambiar(id, 'cita_confirmada'); }, 'sec');
@@ -750,16 +955,18 @@
       if (e === 'cita_confirmada' || e === 'cita_agendada' || e === 'no_asistio') op('Completada', 'La cita ya se realizó. Sin correo.', function(){ cambiar(id, 'completada'); }, 'ok');
       if (e === 'cita_confirmada' || e === 'cita_agendada' || e === 'completada') op('No asistió', 'Sin correo.', function(){ cambiar(id, 'no_asistio'); }, 'sec');
       if (e === 'pago_por_validar') op('Rechazar pago', 'Se le envía el correo "pago rechazado".', function(){ rechazar(id); }, 'bad');
-      if (['pago_por_validar','pago_aprobado','dia_saturado','cita_agendada','cita_confirmada'].indexOf(e) >= 0)
-        op('Cancelar reserva', 'Se quita del calendario y libera el espacio. Sin correo.', function(){ cambiar(id, 'cancelada'); }, 'sec');
+      if (['pago_por_validar','pago_aprobado','dia_saturado','cita_agendada','cita_confirmada','requiere_aprobacion'].indexOf(e) >= 0)
+        op('Cancelar reserva', 'Se quita del calendario y libera el espacio. Sin aviso: escríbele por WhatsApp si hace falta.', function(){ cambiar(id, 'cancelada'); }, 'sec');
     }
-    if (tab === 'pago_por_validar' && (e === 'pago_rechazado' || e === 'cancelada'))
-      op('Reabrir', 'Vuelve a pagos por validar. Sin correo.', function(){ cambiar(id, 'pago_por_validar'); }, 'sec');
+    if (tab === 'requiere_aprobacion') {
+      if (e === 'pago_rechazado') op('Reabrir', 'Vuelve a revisión. Sin correo.', function(){ cambiar(id, 'pago_por_validar'); }, 'sec');
+      if (e === 'cancelada' && r.origen === 'web') op('Reabrir', 'Vuelve a "Requiere aprobación". Sin aviso.', function(){ cambiar(id, 'requiere_aprobacion'); }, 'sec');
+    }
     return { opciones: o };
   }
 
   function mostrarOpciones(r, grupos){
-    var h = '<span class="chip">Mover reserva</span><h3>' + esc(r.nombre) + '</h3><div class="fila"><span>Ahora</span>' + chipEstado(r.estado) + '</div>';
+    var h = '<span class="chip">Mover reserva</span><h3>' + esc(r.nombre) + '</h3><div class="fila"><span>Ahora</span>' + chipEstado(r.estado, r) + '</div>';
     MOVER = [];
     grupos.forEach(function(g){
       h += '<div class="fila"><span>A ' + NOMBRE_TAB[g.tab] + '</span></div>';
@@ -817,9 +1024,10 @@
   /** Cambios sin correo (completada, no asistió, cancelada, reabrir…). */
   function cambiar(id, nuevo){
     var textos = { completada: 'Marcada como completada ✓', no_asistio: 'Marcada como "no asistió"', cancelada: 'Reserva cancelada (sin correo)',
-                   cita_confirmada: 'De vuelta en confirmadas', pago_por_validar: 'Reabierta en pagos por validar' };
+                   cita_confirmada: 'De vuelta en confirmadas', pago_por_validar: 'Reabierta', requiere_aprobacion: 'Reabierta en "Requiere aprobación"' };
     var cambios = { estado: nuevo };
-    if (nuevo === 'cancelada' || nuevo === 'pago_por_validar') { cambios.evento_id = ''; cambios.fecha_cita = ''; cambios.hora_inicio = ''; cambios.hora_fin = ''; }
+    if (nuevo === 'cita_confirmada') cambios.revisada = 'sí';
+    if (nuevo === 'cancelada' || nuevo === 'pago_por_validar' || nuevo === 'requiere_aprobacion') { cambios.evento_id = ''; cambios.fecha_cita = ''; cambios.hora_inicio = ''; cambios.hora_fin = ''; }
     accion(id, 'cambiarEstado', [id, nuevo], cambios, textos[nuevo] || 'Listo', 'Guardado ✓');
   }
 
@@ -846,6 +1054,163 @@
   }
   function confirmar(id){
     accion(id, 'confirmarCita', [id], { estado: 'cita_confirmada' }, 'Cita confirmada. Enviando correo…', 'Correo "cita confirmada" enviado ✓');
+  }
+
+  /** "Requiere aprobación" → aprobar: se agenda a la hora pedida y se le confirma (WhatsApp + correo). */
+  function aprobarRes(id){
+    var r = reservaPorId(id); if (!r) return;
+    var ini = r.hora_solicitada || (r.franja === 'Tarde' ? '13:00' : '09:00');
+    accion(id, 'aprobarReserva', [id], { estado: 'cita_confirmada', revisada: '', fecha_cita: r.fecha_solicitada, hora_inicio: ini,
+      hora_fin: sumarHoras(ini, Number(r.dur_max_h) || Number(r.dur_min_h) || 2) }, 'Aprobada y agendada. Enviando confirmación…', 'Confirmación enviada ✓', true);
+  }
+  function noAprobar(id){
+    var r = reservaPorId(id); if (!r) return;
+    document.getElementById('hoja').innerHTML = '<span class="chip bad">No aprobar</span><h3>' + esc(r.nombre) + '</h3>' +
+      '<div class="alerta">La reserva pasa al historial como <b>cancelada</b> y libera su espacio. No se envía ningún aviso automático: ' +
+      'escríbele por WhatsApp para ofrecerle otra fecha.</div>' +
+      '<div class="acciones"><button class="btn bad" onclick="cerrarModal();cambiar(\'' + id + '\',\'cancelada\')">Sí, no aprobar</button>' +
+      botonWhatsApp(r) + '<button class="btn sec" onclick="cerrarModal()">Volver</button></div>';
+    document.getElementById('modal').classList.add('abierto');
+  }
+  /** Por agendar → Confirmadas sin cambios. */
+  function revisada(id){
+    accion(id, 'marcarRevisada', [id], { revisada: 'sí' }, 'Horario correcto: pasó a Confirmadas.', 'Guardado ✓');
+  }
+  /** Ajustar fecha/horario de una cita (duración real). Solo avisa si cambia la fecha o la hora de inicio. */
+  function ajustar(id){
+    var r = reservaPorId(id); if (!r) return;
+    var f = document.getElementById('fe-' + id).value, hi = document.getElementById('hi-' + id).value, hf = document.getElementById('hf-' + id).value;
+    if (!f || !hi || !hf) return aviso('Completa fecha, inicio y fin.', true);
+    if (horas(hf) <= horas(hi)) return aviso('La hora de fin debe ser posterior a la de inicio.', true);
+    var avisa = !r.evento_id || r.fecha_cita !== f || r.hora_inicio !== hi;
+    document.activeElement && document.activeElement.blur();
+    accion(id, 'ajustarHorario', [id, f, hi, hf], { estado: 'cita_confirmada', revisada: 'sí', fecha_cita: f, hora_inicio: hi, hora_fin: hf },
+      avisa ? 'Horario cambiado. Avisando a la clienta…' : 'Duración ajustada (sin aviso a la clienta).', 'Guardado en Google Calendar ✓', avisa);
+  }
+
+  // ---------------------------------------------------------------- cita manual
+  function catalogo(){ return window.AMARE_SERVICES || []; }
+  function opcionesCat(){
+    var cats = []; catalogo().forEach(function(x){ if (cats.indexOf(x.categoria) < 0) cats.push(x.categoria); });
+    return cats;
+  }
+  function pedirCitaManual(fecha){
+    var hoy = DATOS.hoy || isoDe(new Date());
+    var hayCat = catalogo().length > 0;
+    document.getElementById('hoja').className = 'hoja ancha form-panel';
+    document.getElementById('hoja').innerHTML = '<span class="chip">Agregar cita manual</span><h3>Nueva cita</h3>' +
+      '<div class="campos" style="margin-top:12px">' +
+        (hayCat
+          ? '<div><label>Categoría</label><select id="cm-cat" onchange="cmCat()"><option value="">Elige…</option>' + opcionesCat().map(function(c){ return '<option>' + esc(c) + '</option>'; }).join('') + '</select></div>' +
+            '<div><label>Servicio</label><select id="cm-svc" onchange="cmSvc()"><option value="">Elige la categoría</option></select></div>' +
+            '<div><label>Largo</label><select id="cm-largo" onchange="cmLargo()"><option value="">—</option></select></div>'
+          : '<div><label>Servicio</label><input id="cm-svc-txt" placeholder="Ej. Balayage"></div>') +
+      '</div><div class="campos">' +
+        '<div><label>Fecha</label><input type="date" id="cm-fecha" value="' + (fecha || hoy) + '" oninput="cmCarga()"></div>' +
+        '<div><label>Hora de inicio</label><input type="time" id="cm-hi" value="09:00" step="900"></div>' +
+        '<div><label>Duración (horas)</label><input type="number" id="cm-dur" value="2" min="0.25" max="14" step="0.25"></div>' +
+      '</div><div id="cm-carga"></div>' +
+      '<div class="campos">' +
+        '<div><label>Nombre <small>(opcional)</small></label><input id="cm-nombre" placeholder="Nombre de la clienta"></div>' +
+        '<div><label>Celular <small>(opcional)</small></label><input id="cm-cel" inputmode="tel" placeholder="8888-8888"></div>' +
+        '<div><label>Correo <small>(opcional)</small></label><input id="cm-correo" type="email" placeholder="correo@ejemplo.com"></div>' +
+      '</div>' +
+      '<label>Notas <small>(opcional)</small></label><textarea id="cm-notas" rows="2" style="width:100%"></textarea>' +
+      '<label class="check"><input type="checkbox" id="cm-wa" checked> Enviar confirmación por WhatsApp' + (DATOS.whatsappApi ? '' : ' (cuando esté conectado; mientras tanto usa el botón WhatsApp)') + '</label>' +
+      '<label class="check"><input type="checkbox" id="cm-mail"> Enviar confirmación por correo</label>' +
+      '<p class="nota">La cita bloquea su espacio en Google Calendar, queda en la base de datos y recibe los recordatorios de 3 días y 1 día antes (si tiene celular o correo).</p>' +
+      '<div class="acciones"><button class="btn" onclick="crearManual()">Agregar cita</button><button class="btn sec" onclick="cerrarModal()">Cancelar</button></div>';
+    document.getElementById('modal').classList.add('abierto');
+    cmCarga();
+  }
+  function cmServicio(){
+    var cat = document.getElementById('cm-cat'), svc = document.getElementById('cm-svc');
+    if (!cat || !svc || svc.value === '') return null;
+    return catalogo().filter(function(x){ return x.categoria === cat.value; })[Number(svc.value)] || null;
+  }
+  function cmCat(){
+    var cat = document.getElementById('cm-cat').value;
+    var lista = catalogo().filter(function(x){ return x.categoria === cat; });
+    document.getElementById('cm-svc').innerHTML = '<option value="">Elige…</option>' + lista.map(function(x, i){ return '<option value="' + i + '">' + esc(x.servicio) + '</option>'; }).join('');
+    document.getElementById('cm-largo').innerHTML = '<option value="">—</option>';
+  }
+  function cmSvc(){
+    var s = cmServicio();
+    document.getElementById('cm-largo').innerHTML = s ? Object.keys(s.tiers).map(function(l){ return '<option>' + esc(l) + '</option>'; }).join('') : '<option value="">—</option>';
+    if (s && s.horas && s.horas.length) document.getElementById('cm-hi').value = String(s.horas[0]).padStart(2, '0') + ':00';
+    cmLargo();
+  }
+  function cmLargo(){
+    var s = cmServicio(); if (!s) return;
+    var t = s.tiers[document.getElementById('cm-largo').value];
+    if (t) document.getElementById('cm-dur').value = Number(t.durMax) || Number(t.durMin) || 2;
+  }
+  function cmCarga(){
+    var f = document.getElementById('cm-fecha').value, c = document.getElementById('cm-carga');
+    if (c) c.innerHTML = f ? textoCarga(f) : '';
+  }
+  function crearManual(){
+    var v = function(id){ var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+    var s = cmServicio(), largo = v('cm-largo'), t = s && s.tiers[largo];
+    var servicio = s ? s.servicio : v('cm-svc-txt');
+    if (!servicio) return aviso('Elige el servicio.', true);
+    var f = v('cm-fecha'), hi = v('cm-hi'), dur = Number(v('cm-dur'));
+    if (!f || !hi) return aviso('Completa la fecha y la hora de inicio.', true);
+    if (!(dur > 0)) return aviso('La duración debe ser mayor que cero.', true);
+    var correo = v('cm-correo');
+    if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(correo)) return aviso('El correo no es válido.', true);
+    var datos = {
+      categoria: s ? s.categoria : '', servicio: servicio, codigo: s ? s.codigo : '', largo: t ? largo : '',
+      precio_min: t ? t.min : 0, precio_max: t ? t.max : 0, dur_min_h: t ? t.durMin : dur, dur_max_h: dur,
+      nombre: v('cm-nombre'), celular: v('cm-cel'), correo: correo, comentarios: v('cm-notas'),
+      fecha: f, horaInicio: hi, horaFin: sumarHoras(hi, dur),
+      enviarWhatsapp: document.getElementById('cm-wa').checked && !!v('cm-cel'),
+      enviarCorreo: document.getElementById('cm-mail').checked && !!correo
+    };
+    cerrarModal();
+    aviso('Creando la cita…');
+    COLA.push({ fn: 'crearCitaManual', args: [datos], nueva: true, avisa: datos.enviarWhatsapp || datos.enviarCorreo, textoListo: 'Cita agregada al calendario ✓' });
+    procesarCola();
+  }
+
+  // ---------------------------------------------------------------- espacio bloqueado
+  function pedirBloqueo(fecha){
+    var hoy = DATOS.hoy || isoDe(new Date());
+    document.getElementById('hoja').className = 'hoja form-panel';
+    document.getElementById('hoja').innerHTML = '<span class="chip">Espacio bloqueado</span><h3>Bloquear un espacio</h3>' +
+      '<p class="nota">Para vacaciones, ausencias, viajes o eventos. No se envía ningún mensaje; solo tú lo ves y la web deja de ofrecer ese espacio.</p>' +
+      '<label class="check" style="margin-top:10px"><input type="checkbox" id="bq-dia" checked onchange="document.getElementById(\'bq-horas\').style.display=this.checked?\'none\':\'flex\';document.getElementById(\'bq-hasta-c\').style.display=this.checked?\'block\':\'none\'"> Todo el día</label>' +
+      '<div class="campos">' +
+        '<div><label>Fecha</label><input type="date" id="bq-fecha" value="' + (fecha || hoy) + '"></div>' +
+        '<div id="bq-hasta-c"><label>Hasta <small>(opcional)</small></label><input type="date" id="bq-hasta"></div>' +
+      '</div>' +
+      '<div class="campos" id="bq-horas" style="display:none">' +
+        '<div><label>Desde</label><input type="time" id="bq-hi" value="09:00" step="900"></div>' +
+        '<div><label>Hasta</label><input type="time" id="bq-hf" value="12:00" step="900"></div>' +
+      '</div>' +
+      '<label>Motivo <small>(opcional, solo lo ves tú)</small></label><input id="bq-motivo" style="width:100%" placeholder="Ej. Vacaciones">' +
+      '<div class="acciones"><button class="btn" onclick="crearBloqueoPanel()">Bloquear</button><button class="btn sec" onclick="cerrarModal()">Cancelar</button></div>';
+    document.getElementById('modal').classList.add('abierto');
+  }
+  function crearBloqueoPanel(){
+    var todo = document.getElementById('bq-dia').checked;
+    var f = document.getElementById('bq-fecha').value, hasta = document.getElementById('bq-hasta').value;
+    var hi = document.getElementById('bq-hi').value, hf = document.getElementById('bq-hf').value, motivo = document.getElementById('bq-motivo').value.trim();
+    if (!f) return aviso('Elige la fecha.', true);
+    if (!todo && (!hi || !hf || horas(hf) <= horas(hi))) return aviso('Revisa las horas: el fin debe ser después del inicio.', true);
+    if (todo && hasta && hasta < f) return aviso('La fecha "hasta" debe ser igual o posterior.', true);
+    cerrarModal();
+    aviso('Bloqueando el espacio…');
+    COLA.push({ fn: 'crearBloqueo', args: [f, todo ? '' : hi, todo ? '' : hf, motivo, todo ? hasta : ''], recargar: true, textoListo: 'Espacio bloqueado ✓' });
+    procesarCola();
+  }
+  function quitarBloqueoPanel(eventoId){
+    if (!confirm('¿Quitar este espacio bloqueado? La web vuelve a ofrecer ese espacio si hay cupo.')) return;
+    cerrarModal();
+    Object.keys(CACHE).forEach(function(f){ CACHE[f] = CACHE[f].filter(function(e){ return e.id !== eventoId; }); });
+    pintar();
+    COLA.push({ fn: 'quitarBloqueo', args: [eventoId], textoListo: 'Bloqueo quitado ✓' });
+    procesarCola();
   }
 
   function cargar(){
