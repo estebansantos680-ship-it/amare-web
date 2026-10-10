@@ -77,3 +77,25 @@ def tarjeta(clave, eyebrow, titular):
 if __name__ == '__main__':
     for clave, (eyebrow, titular) in TARJETAS.items():
         print(tarjeta(clave, eyebrow, titular))
+
+
+def cabecera_correo():
+    """Banda plana de marca para la cabecera de los correos (assets/email/cabecera.jpg), sin fotos de personas."""
+    w, h = 1200, 300
+    im = Image.new('RGB', (w, h), (245, 243, 239))
+    d = ImageDraw.Draw(im)
+    cx = w // 2
+    d.line((120, h // 2, cx - 90, h // 2), fill=TAUPE, width=2)
+    d.line((cx + 90, h // 2, w - 120, h // 2), fill=TAUPE, width=2)
+    d.ellipse((cx - 62, h // 2 - 62, cx + 62, h // 2 + 62), outline=TAUPE, width=2)
+    centrado(d, cx, h // 2 - 52, 'A', fuente('georgia.ttf', 80), NEGRO)
+    for dx in (-12, 12):
+        d.ellipse((cx + dx - 5, h // 2 - 50, cx + dx + 5, h // 2 - 40), fill=TAUPE)
+    espaciado(d, (cx, h - 62), 'COLOR  ·  ALISAMIENTOS  ·  TRATAMIENTOS CAPILARES', fuente('segoeui.ttf', 17), TAUPE_OSC, 4, centro=True)
+    destino = ROOT / 'assets' / 'email' / 'cabecera.jpg'
+    im.save(destino, 'JPEG', quality=92, optimize=True, progressive=True)
+    return destino
+
+
+if __name__ == '__main__':
+    print(cabecera_correo())
