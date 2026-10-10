@@ -316,7 +316,9 @@ function doPost(e) {
       var todas = leerReservas_(), aj = ajustes_();
       var f = r.fecha_solicitada, modoFranja = (modosDias_()[f] || {})[franjaClave_(r.franja)];
       var cierre = (cerradosPorFranja_(ocupacion_(todas), aj)[f] || {})[franjaClave_(r.franja)];
-      var decision = evaluarDia_(resumenDias_(todas)[f], r.categoria, r.franja, obtenerReglas_(), modoFranja, cierre);
+      var decision = franjaPasada_(f, franjaClave_(r.franja))
+        ? { accion: 'bloquear', mensaje: 'Ese horario de hoy ya pasó.' }
+        : evaluarDia_(resumenDias_(todas)[f], r.categoria, r.franja, obtenerReglas_(), modoFranja, cierre);
       if (decision.accion === 'bloquear') {
         if (archivo) archivo.setTrashed(true);
         return json_({ ok: false, error: 'franja_llena', mensaje: decision.mensaje });
@@ -513,6 +515,15 @@ function bloqueosCompat_(dias, cerrados, modos, aj) {
 }
 
 function franjaClave_(franja) { return norm_(franja) === 'tarde' ? 'tarde' : 'manana'; }
+
+/** ¿Esa franja ya pasó? (hora de Costa Rica). La mañana termina a las 12:00 y la tarde al cierre del salón. */
+function franjaPasada_(fecha, clave) {
+  var ahora = new Date();
+  var hoy = Utilities.formatDate(ahora, CONFIG.ZONA, 'yyyy-MM-dd');
+  var hora = Number(Utilities.formatDate(ahora, CONFIG.ZONA, 'H')) + Number(Utilities.formatDate(ahora, CONFIG.ZONA, 'm')) / 60;
+  var fin = clave === 'tarde' ? CONFIG.HORA_TARDE[1] : CONFIG.CORTE_FRANJA;
+  return fecha < hoy || (fecha === hoy && hora >= fin);
+}
 
 // ------------------------------------------------------------------ Ajustes y bloqueos de día (los cambia el admin)
 function ajustes_() {

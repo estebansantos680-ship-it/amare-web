@@ -230,14 +230,27 @@
     if (o.horas >= DATOS.ajustes.limiteHoras) return 'horas';
     return '';
   }
-  /** Estado de una franja en la web: 'bloqueada' | 'abierta' | 'citas' | 'horas' | 'libre' */
+  /** Hora actual de Costa Rica: { iso, hora } */
+  function ahoraCR(){
+    var p = {};
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Costa_Rica', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).forEach(function(x){ p[x.type] = x.value; });
+    return { iso: p.year + '-' + p.month + '-' + p.day, hora: Number(p.hour) + Number(p.minute) / 60 };
+  }
+  /** La mañana de hoy deja de ofrecerse a las 12:00 y la tarde al cierre (18:00), igual que la página y el servidor. */
+  function franjaPasada(f, fr){
+    var a = ahoraCR();
+    return f < a.iso || (f === a.iso && a.hora >= (fr === 'tarde' ? 18 : (DATOS.corte || 12)));
+  }
+  /** Estado de una franja en la web: 'pasada' | 'bloqueada' | 'abierta' | 'citas' | 'horas' | 'libre' */
   function estadoFranja(f, fr){
+    if (franjaPasada(f, fr)) return 'pasada';
     var m = modoFranja(f, fr);
     if (m === 'bloquear') return 'bloqueada';
     if (m === 'abrir') return 'abierta';
     return cierreAuto(f, fr) || 'libre';
   }
-  function franjaCerrada(e){ return e === 'bloqueada' || e === 'horas' || e === 'citas'; }
+  function franjaCerrada(e){ return e === 'pasada' || e === 'bloqueada' || e === 'horas' || e === 'citas'; }
   /** "3/6 h · 2/4 citas" de una franja */
   function textoOcupacion(o){ return o.horas + '/' + DATOS.ajustes.limiteHoras + ' h · ' + o.citas + '/' + DATOS.ajustes.tope + ' citas'; }
   /** El día no se ofrece en la web solo si mañana y tarde están cerradas. */
@@ -246,13 +259,14 @@
     if (!franjaCerrada(m) || !franjaCerrada(t)) return '';
     return m === t ? (m === 'bloqueada' ? 'manual' : m) : 'mixto';
   }
-  var TEXTO_ESTADO = { bloqueada: 'bloqueada a mano', abierta: 'abierta a mano', horas: 'llena por horas', citas: 'llena por citas', libre: 'disponible' };
+  var TEXTO_ESTADO = { bloqueada: 'bloqueada a mano', abierta: 'abierta a mano', horas: 'llena por horas', citas: 'llena por citas', pasada: 'ya pasó', libre: 'disponible' };
   /** Resumen corto para el encabezado del día en la Agenda. */
   function resumenDisponibilidad(f){
+    if (f < DATOS.hoy) return '';
     var m = estadoFranja(f, 'manana'), t = estadoFranja(f, 'tarde');
     if (m === t) {
       if (m === 'libre') return '';
-      var txt = { bloqueada: 'Bloqueado a mano', abierta: 'Abierto a mano', horas: 'Lleno por horas', citas: 'Lleno por citas' }[m];
+      var txt = { bloqueada: 'Bloqueado a mano', abierta: 'Abierto a mano', horas: 'Lleno por horas', citas: 'Lleno por citas', pasada: 'Ya cerró por hoy' }[m];
       return '<small class="' + (m === 'abierta' ? 'abierto' : 'llena') + '">' + txt + '</small>';
     }
     return FRANJAS.map(function(x){

@@ -303,11 +303,27 @@
     return String(t == null ? '' : t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
   }
 
+  // Hora actual en Costa Rica (no la del dispositivo de la clienta): { iso: 'yyyy-mm-dd', hora: 13.5 }
+  function ahoraCR() {
+    var p = {};
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Costa_Rica', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).forEach(function (x) { p[x.type] = x.value; });
+    return { iso: p.year + '-' + p.month + '-' + p.day, hora: Number(p.hour) + Number(p.minute) / 60 };
+  }
+  // Fin de cada franja para el día de hoy: la mañana termina a las 12:00 y la tarde al cierre del salón (18:00).
+  var FIN_FRANJA = { manana: 12, tarde: 18 };
+  function franjaPasada(iso, clave) {
+    var ahora = ahoraCR();
+    return iso < ahora.iso || (iso === ahora.iso && ahora.hora >= FIN_FRANJA[clave]);
+  }
+
   // Misma lógica que el servidor (Codigo.gs → evaluarDia_): { accion: 'permitir' | 'aprobacion' | 'bloquear', mensaje }
   function evaluarDia(iso, franja) {
     var dia = dispo.dias[iso] || { total: 0, cats: {} };
-    // Disponibilidad manual del panel para esa franja: bloquear la cierra; abrir ignora horas, tope y "No permitir".
     var clave = norm(franja) === 'tarde' ? 'tarde' : 'manana';
+    // Si esa franja de hoy ya pasó, no se puede reservar (ni aunque esté abierta a mano).
+    if (franjaPasada(iso, clave)) return { accion: 'bloquear', mensaje: 'Ese horario de hoy ya pasó.' };
+    // Disponibilidad manual del panel para esa franja: bloquear la cierra; abrir ignora horas, tope y "No permitir".
     var modo = (dispo.modos[iso] || {})[clave];
     if (modo === 'bloquear') return { accion: 'bloquear', mensaje: 'Ese horario no está disponible ese día.' };
     var abierto = modo === 'abrir';
@@ -335,8 +351,7 @@
   // Devuelve null si el día se puede elegir, o el motivo del bloqueo.
   function motivoDiaBloqueado(iso) {
     var d = new Date(iso + 'T12:00:00');
-    var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-    if (d < hoy) return 'pasado';
+    if (franjaPasada(iso, 'tarde')) return 'pasado'; // días anteriores, y hoy cuando ya cerró el salón (hora de Costa Rica)
     if (d.getDay() === 0 || d.getDay() === 1) return 'cerrado';
     if (d > FECHA_MAX) return 'lejos';
     if (evaluarDia(iso, 'Mañana').accion === 'bloquear' && evaluarDia(iso, 'Tarde').accion === 'bloquear') return 'lleno';
@@ -435,10 +450,12 @@
 
   function actualizarFranjas() {
     els.franjaButtons.forEach(function (btn) {
-      var llena = !!state.fecha && evaluarDia(state.fecha, btn.getAttribute('data-franja')).accion === 'bloquear';
+      var franja = btn.getAttribute('data-franja');
+      var llena = !!state.fecha && evaluarDia(state.fecha, franja).accion === 'bloquear';
+      var pasada = llena && franjaPasada(state.fecha, franja === 'Tarde' ? 'tarde' : 'manana');
       btn.disabled = llena;
       btn.classList.toggle('llena', llena);
-      btn.textContent = btn.getAttribute('data-franja') + (llena ? ' · no disponible' : '');
+      btn.textContent = franja + (pasada ? ' · ya pasó' : (llena ? ' · no disponible' : ''));
     });
   }
 
@@ -472,9 +489,11 @@
     if (motivo) {
       els.availabilityResult.hidden = false;
       els.availabilityResult.className = 'availability-result full';
-      els.availabilityResult.textContent = motivo === 'lleno'
-        ? 'Ese día ya está lleno. Elige otra fecha, por favor.'
-        : 'Domingos y lunes descansamos. Elige un día de martes a sábado.';
+      els.availabilityResult.textContent = {
+        lleno: 'Ese día ya está lleno. Elige otra fecha, por favor.',
+        pasado: 'Ese día ya pasó o ya cerramos por hoy. Elige otra fecha, por favor.',
+        lejos: 'Esa fecha todavía no está disponible para reservar en línea.'
+      }[motivo] || 'Domingos y lunes descansamos. Elige un día de martes a sábado.';
       actualizarFranjas();
       return;
     }
