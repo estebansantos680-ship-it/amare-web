@@ -790,6 +790,7 @@
   }
 
   function mostrarErrorPago(msg) {
+    els.envioError.className = 'field-error';
     els.envioError.hidden = !msg;
     els.envioError.textContent = msg || '';
   }
@@ -1029,7 +1030,7 @@
         'Te avisamos por WhatsApp y correo en cuanto quede confirmada.';
     } else {
       els.doneTitle.textContent = '¡Gracias, ' + datos.nombre + '! Tu cita está reservada';
-      els.doneTexto.textContent = 'Te esperamos el ' + datos.cuando + '. Te enviamos la confirmación por WhatsApp y a tu correo.';
+      els.doneTexto.textContent = 'Te esperamos el ' + datos.cuando + (/\.$/.test(datos.cuando) ? ' ' : '. ') + 'Te enviamos la confirmación por WhatsApp y a tu correo.';
     }
     els.doneWhatsapp.href = datos.wa;
     goToStep(6);
@@ -1149,6 +1150,10 @@
     mostrarErrorPago('');
     els.btnConfirmar.classList.add('is-loading');
     els.btnConfirmar.textContent = (state.comprobante || state.fotos.length) ? 'Enviando archivos…' : 'Enviando…';
+    mostrarErrorPago('');
+    els.envioError.hidden = false;
+    els.envioError.className = 'field-note';
+    els.envioError.textContent = 'Estamos reservando tu espacio y agendándolo en el calendario. Puede tardar hasta 30 segundos; no cierres esta página.';
 
     // Servidor de reservas (Apps Script): guarda la reserva, el comprobante y envía los correos.
     if (API_URL) {
