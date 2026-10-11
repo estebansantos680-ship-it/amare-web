@@ -54,8 +54,10 @@ FOTOS = {
     'parejo-1': ('Imagenes servicio/09 Color Parejo/1.jpeg', (600, 800)),
     'parejo-2': ('Imagenes servicio/09 Color Parejo/2.jpeg', (600, 800)),
     'corte-1': ('Imagenes servicio/10 Corte de Cabello/3.jpeg', (600, 800)),
-    'rizos-1': ('Imagenes servicio/11 Tratamiento en rizos/4.1.jpg', (600, 800)),
-    'rizos-2': ('Imagenes servicio/11 Tratamiento en rizos/IMG_7010.jpeg', (600, 800)),
+    'rizos-1': ('Imagenes servicio/11 Tratamiento en rizos/1.jpg', (600, 800), {'foco': (0.5, 0.45), 'zoom': 1.0}),
+    'rizos-2': ('Imagenes servicio/11 Tratamiento en rizos/2.jpg', (600, 800), {'foco': (0.5, 0.45), 'zoom': 1.0}),
+    'rizos-3': ('Imagenes servicio/11 Tratamiento en rizos/3.jpg', (600, 800), {'foco': (0.5, 0.45), 'zoom': 1.0}),
+    'rizos-4': ('Imagenes servicio/11 Tratamiento en rizos/4.1.jpg', (600, 800), {'foco': (0.5, 0.45), 'zoom': 1.0}),
     # Portada de servicios.html (alternan) y contacto
     'pensados-1': ('Servicios pensados en ti/IMG_4617.JPG', (900, 1125)),
     'pensados-2': ('Servicios pensados en ti/IMG_4662.JPG', (900, 1125)),
@@ -86,6 +88,7 @@ MUDOS = {
     'parejo-v1': ('Imagenes servicio/09 Color Parejo/Opcion 3 video.MP4', 0, None, '', 1),
     'corte-v1': ('Imagenes servicio/10 Corte de Cabello/Video para corte minuto 251 a 3 minutos.MP4', 170, 10, 'transpose=2,', 1),
     'rizos-v1': ('Imagenes servicio/11 Tratamiento en rizos/IMG_6998.mov', 0, None, '', 0.5),  # a media velocidad
+    'rizos-banner': ('Imagenes servicio/11 Tratamiento en rizos/video rizos.mp4', 0, None, '', 1),  # portada de servicios-rizos.html
 }
 
 # nombre: ruta (videos completos con sonido)
@@ -153,9 +156,11 @@ def poster(mp4, destino, seg=0.5):
     os.remove(tmp)
 
 
-def mudos():
+def mudos(solo=None):
     os.makedirs(VIDEO, exist_ok=True)
     for nombre, (ruta, ini, dur, extra, vel) in MUDOS.items():
+        if solo and nombre not in solo:
+            continue
         entrada = os.path.join(ORIGEN, ruta)
         base = os.path.join(VIDEO, nombre)
         corte = ['-ss', str(ini)] + (['-t', str(dur)] if dur else []) + ['-i', entrada, '-an']
@@ -187,5 +192,7 @@ if __name__ == '__main__':
         fotos()
     if 'mudos' in que:
         mudos()
+    elif any(q.startswith('mudo:') for q in que):  # ej. mudo:rizos-banner
+        mudos([q[5:] for q in que if q.startswith('mudo:')])
     if 'sonido' in que:
         sonido()
