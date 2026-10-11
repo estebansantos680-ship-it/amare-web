@@ -230,7 +230,7 @@ nav.wrap{
   padding:14px;
 }
 .hero-badge svg{ position:absolute; inset:0; width:100%; height:100%; animation:spin 22s linear infinite; }
-.hero-badge text{ font-family:var(--sans); font-size:8.4px; letter-spacing:3.2px; text-transform:uppercase; fill:var(--taupe); font-style:normal; }
+.hero-badge text{ font-family:var(--sans); font-size:7.6px; letter-spacing:1.6px; text-transform:uppercase; fill:var(--taupe); font-style:normal; }
 @keyframes spin{ to{ transform:rotate(360deg); } }
 
 .hero-text .eyebrow{ margin-bottom:22px; display:block; }
@@ -835,3 +835,83 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
   .team-photo img{ height:auto; }
   .team-photo figcaption{ position:static; background:var(--black); }
 }
+
+/* =========================================================
+   MEDIOS DEL CLIENTE (oct-2026): carruseles sincronizados, videos con sonido y banners sin desenfoque
+   ========================================================= */
+/* Portada del inicio: cambio de foto más lento y elegante */
+.fade-slides img{ transition:opacity 2.4s ease-in-out; }
+
+/* Carrusel foto → video → foto: todas las tarjetas cambian al mismo tiempo (js/main.js) */
+.media-rotator{ position:relative; overflow:hidden; background:var(--mocha); }
+.media-rotator .rot-item{
+  position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;
+  opacity:0; transition:opacity 2s ease-in-out, transform 1.2s var(--ease);
+}
+.media-rotator .rot-item.is-active{ opacity:1; }
+.media-rotator .rot-item:first-child{ position:relative; }
+.cat-card-link:hover .cat-photo .rot-item{ transform:scale(1.04); }
+
+/* Video con sonido: empieza silenciado; la persona lo activa, cambia el volumen o lo pone en pantalla completa */
+.video-sonido{ position:relative; border-radius:var(--radius-lg); overflow:hidden; background:var(--black); box-shadow:var(--shadow); aspect-ratio:9/16; }
+.video-sonido video{ width:100%; height:100%; object-fit:cover; display:block; background:var(--black); }
+.btn-sonido{
+  position:absolute; top:14px; right:14px; z-index:3; display:inline-flex; align-items:center; gap:8px;
+  padding:9px 14px; border-radius:40px; border:1px solid rgba(245,243,239,.55); background:rgba(11,11,11,.55);
+  color:var(--cream); font-family:var(--sans); font-size:.6rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase;
+  cursor:pointer; backdrop-filter:blur(6px); transition:.3s var(--ease);
+}
+.btn-sonido:hover{ background:var(--cream); color:var(--black); }
+.btn-sonido svg{ width:16px; height:16px; }
+.btn-sonido[hidden]{ display:none; }
+.split-video{ width:min(100%, calc(80vh * 9 / 16)); margin:0 auto; }
+
+/* Reel "Cada detalle, en movimiento": videos verticales completos; el del centro tiene sonido */
+.reel-item{ aspect-ratio:9/16; }
+.reel-item.reel-main::after{ display:none; }
+.reel-item .video-sonido{ position:absolute; inset:0; border-radius:0; box-shadow:none; aspect-ratio:auto; }
+.reel-item.reel-main figcaption{ top:clamp(14px, 2vw, 22px); bottom:auto; right:auto; z-index:2; text-shadow:0 2px 12px rgba(0,0,0,.5); pointer-events:none; }
+.reel-item.reel-main .btn-sonido{ top:auto; bottom:64px; left:50%; right:auto; transform:translateX(-50%); }
+
+/* Portada de cada servicio: texto a la izquierda y el video completo a la derecha, con colores de la marca (sin desenfoque) */
+.page-hero.hero-media{ text-align:left; padding:clamp(40px, 6vw, 84px) 0; background:linear-gradient(135deg, var(--black) 0%, var(--mocha) 100%); }
+.hero-media-grid{ display:grid; grid-template-columns:1.15fr .85fr; gap:clamp(30px, 6vw, 90px); align-items:center; }
+.page-hero.hero-media p{ margin:0; max-width:560px; }
+.page-hero.hero-media h1{ margin:14px 0 18px; }
+.hero-media-visual{
+  position:relative; justify-self:center; width:min(100%, calc(68vh * 9 / 16)); aspect-ratio:9/16;
+  border-radius:var(--radius-lg); overflow:hidden; background:var(--black);
+  box-shadow:0 30px 70px rgba(0,0,0,.45); outline:1px solid rgba(181,164,138,.5); outline-offset:10px;
+}
+.hero-media-visual > video{ width:100%; height:100%; object-fit:cover; display:block; }
+.hero-media-visual .video-sonido{ height:100%; border-radius:0; box-shadow:none; }
+.hero-media-visual.foto{ aspect-ratio:4/5; width:min(100%, calc(68vh * 4 / 5)); }
+@media (max-width:860px){
+  .hero-media-grid{ grid-template-columns:1fr; text-align:center; }
+  .page-hero.hero-media p{ margin:0 auto; }
+  .hero-media-visual{ width:min(100%, 340px); }
+  .hero-media-visual.foto{ width:min(100%, 380px); }
+}
+
+/* "No dudes en ponerte en contacto": texto sobre color de marca y la foto completa al lado (sin desenfoque) */
+.cta-banner .frame.frame-split{ display:grid; grid-template-columns:1.25fr .75fr; align-items:stretch; background:linear-gradient(135deg, var(--black) 0%, var(--mocha) 100%); }
+.cta-banner .frame.frame-split::after{ display:none; }
+.cta-banner .frame.frame-split img{ position:relative; inset:auto; order:2; width:100%; height:100%; object-fit:cover; animation:none; }
+.cta-banner .frame.frame-split .content{ align-self:center; }
+@media (max-width:760px){
+  .cta-banner .frame.frame-split{ grid-template-columns:1fr; }
+  .cta-banner .frame.frame-split img{ max-height:420px; }
+}
+
+/* Productos: la foto completa del producto sobre fondo claro */
+.gallery-item .img-producto{ object-fit:contain; background:#fff; }
+
+/* Misión y visión: portada plana con la marca de agua AMARË */
+.page-hero-plano{ background:linear-gradient(135deg, var(--black) 0%, var(--mocha) 100%); }
+.page-hero-plano .bg-word{
+  position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); z-index:0; pointer-events:none;
+  font-family:var(--serif); font-size:clamp(6rem, 22vw, 18rem); letter-spacing:.06em; color:rgba(181,164,138,.08); white-space:nowrap;
+}
+
+/* Ubicación: imagen nueva en proporción 2:3 */
+.location-photo.tall{ aspect-ratio:2/3; }

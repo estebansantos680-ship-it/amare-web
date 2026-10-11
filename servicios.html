@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=202610101625">
+<link rel="stylesheet" href="css/style.css?v=202610101800">
 </head>
 <body>
 
@@ -60,12 +60,17 @@
     <!-- Nota interna del equipo (no publicar): catálogo base tomado de AMARE_Blueprint_AppCitas.xlsx, hoja Servicios_Iniciales.
          Los precios están estructurados para que la futura app pueda calcular depósito y mostrar precio por largo de cabello.
          Los cambios de precio los gestiona Julio directamente desde la app/panel en caso de promociones mensuales. -->
-    <section class="page-hero">
-      <div class="page-hero-bg" aria-hidden="true"><img src="assets/images/real-balayage-ondas-ancho-1800x900.webp" alt=""></div>
-      <div class="wrap">
-        <p class="eyebrow">Nuestros servicios</p>
-        <h1>Servicios pensados para ti</h1>
-        <p>Ven a disfrutar de un ambiente relajante y acogedor mientras te consentimos con nuestros productos de alta calidad. Elige una categoría para ver el detalle, precios y duración de cada servicio.</p>
+    <section class="page-hero hero-media">
+      <div class="wrap hero-media-grid">
+        <div class="hero-media-text">
+          <p class="eyebrow">Nuestros servicios</p>
+          <h1>Servicios pensados para ti</h1>
+          <p>Ven a disfrutar de un ambiente relajante y acogedor mientras te consentimos con nuestros productos de alta calidad. Elige una categoría para ver el detalle, precios y duración de cada servicio.</p>
+        </div>
+        <div class="hero-media-visual foto media-rotator">
+          <img class="rot-item is-active" src="assets/media/pensados-1.webp" alt="Clienta sonriente con balayage en ondas" width="900" height="1125">
+          <img class="rot-item" src="assets/media/pensados-2.webp" alt="Rubio luminoso en ondas, vista de espalda" width="900" height="1125" loading="lazy">
+        </div>
       </div>
     </section>
 
@@ -73,24 +78,33 @@
       <div class="wrap">
         <div class="cat-row cols-3">
           <a class="cat-card cat-card-link" href="servicios-alisamientos.html">
-            <div class="cat-photo">
-              <img src="assets/images/real-liso-negro-700x875.webp" alt="Cabello negro muy largo, liso y brillante tras un alisamiento" width="700" height="875" loading="lazy">
+            <div class="cat-photo media-rotator">
+              <img class="rot-item is-active" src="assets/media/alis-1.webp" alt="Alisado castaño oscuro, liso y brillante" width="600" height="800" loading="lazy">
+              <video class="rot-item rot-video" muted loop playsinline preload="none" poster="assets/video/alis-v1-poster.webp" aria-label="Alisado en movimiento"><source data-src="assets/video/alis-v1.webm" type="video/webm"><source data-src="assets/video/alis-v1.mp4" type="video/mp4"></video>
+              <img class="rot-item" src="assets/media/alis-2.webp" alt="Alisado en castaño claro con brillo" width="600" height="800" loading="lazy">
+              <video class="rot-item rot-video" muted loop playsinline preload="none" poster="assets/video/alis-v2-poster.webp" aria-label="Resultado de alisado"><source data-src="assets/video/alis-v2.webm" type="video/webm"><source data-src="assets/video/alis-v2.mp4" type="video/mp4"></video>
+              <img class="rot-item" src="assets/media/alis-3.webp" alt="Nanoplastia en cabello largo" width="600" height="800" loading="lazy">
+              <video class="rot-item rot-video" muted loop playsinline preload="none" poster="assets/video/alis-v3-poster.webp" aria-label="Brillo después del alisado"><source data-src="assets/video/alis-v3.webm" type="video/webm"><source data-src="assets/video/alis-v3.mp4" type="video/mp4"></video>
             </div>
             <h3>Alisamientos Capilares</h3>
             <p class="cat-blurb">Nanoplastias, bioplastias y liso orgánico para un alisado premium con reparación profunda.</p>
             <span class="btn-pill">Ver 7 servicios</span>
           </a>
           <a class="cat-card cat-card-link" href="servicios-cirugia-capilar.html">
-            <div class="cat-photo">
-              <img src="assets/images/cirugia-capilar-mujer-700x875.webp" alt="Especialista aplicando tratamiento en la línea capilar de una clienta" width="700" height="875" loading="lazy">
+            <div class="cat-photo media-rotator">
+              <img class="rot-item is-active" src="assets/media/cir-1.webp" alt="Aplicación de cirugía capilar en cabello oscuro" width="600" height="800" loading="lazy">
+              <video class="rot-item rot-video" muted loop playsinline preload="none" poster="assets/video/cir-v1-poster.webp" aria-label="Clienta luciendo su cabello tras la cirugía capilar"><source data-src="assets/video/cir-v1.webm" type="video/webm"><source data-src="assets/video/cir-v1.mp4" type="video/mp4"></video>
+              <img class="rot-item" src="assets/media/cir-2.webp" alt="Gota de tratamiento sobre la fibra capilar" width="600" height="800" loading="lazy">
             </div>
             <h3>Cirugía Capilar</h3>
             <p class="cat-blurb">Botox alisante que hidrata, repara y controla el frizz sin perder el movimiento natural.</p>
             <span class="btn-pill">Ver 4 servicios</span>
           </a>
           <a class="cat-card cat-card-link" href="servicios-tratamientos-capilares.html">
-            <div class="cat-photo">
-              <img src="assets/images/real-rubio-liso-700x875.webp" alt="Cabello rubio sano y brillante tras un tratamiento" width="700" height="875" loading="lazy">
+            <div class="cat-photo media-rotator">
+              <img class="rot-item is-active" src="assets/media/trat-1.webp" alt="Cabello largo con brillo tras un tratamiento" width="600" height="800" loading="lazy">
+              <video class="rot-item rot-video" muted loop playsinline preload="none" poster="assets/video/trat-v1-poster.webp" aria-label="Tratamiento capilar en movimiento"><source data-src="assets/video/trat-v1.webm" type="video/webm"><source data-src="assets/video/trat-v1.mp4" type="video/mp4"></video>
+              <img class="rot-item" src="assets/media/trat-2.webp" alt="Clienta con balayage hidratado y ondas" width="600" height="800" loading="lazy">
             </div>
             <h3>Tratamientos Capilares</h3>
             <p class="cat-blurb">Reconstrucción, nutrición, hidratación y terapias especializadas para la salud del cabello.</p>
@@ -99,32 +113,39 @@
         </div>
         <div class="cat-row cols-3">
           <a class="cat-card cat-card-link" href="servicios-tecnica-color.html">
-            <div class="cat-photo">
-              <img src="assets/images/real-balayage-ondas-700x875.webp" alt="Balayage con ondas definidas, vista de espalda" width="700" height="875" loading="lazy">
+            <div class="cat-photo media-rotator">
+              <img class="rot-item is-active" src="assets/media/color-1.webp" alt="Balayage con ondas, vista de espalda" width="600" height="800" loading="lazy">
+              <video class="rot-item rot-video" muted loop playsinline preload="none" poster="assets/video/color-v1-poster.webp" aria-label="Balayage en movimiento"><source data-src="assets/video/color-v1.webm" type="video/webm"><source data-src="assets/video/color-v1.mp4" type="video/mp4"></video>
+              <img class="rot-item" src="assets/media/color-2.webp" alt="Balayage gris perla en ondas" width="600" height="800" loading="lazy">
             </div>
             <h3>Técnica de Color</h3>
             <p class="cat-blurb">Balayage, babylights, highlights y técnicas de iluminación personalizadas.</p>
             <span class="btn-pill">Ver 8 servicios</span>
           </a>
           <a class="cat-card cat-card-link" href="servicios-color-parejo.html">
-            <div class="cat-photo">
-              <img src="assets/images/real-bob-magenta-700x875.webp" alt="Color parejo magenta en corte recto" width="700" height="875" loading="lazy">
+            <div class="cat-photo media-rotator">
+              <img class="rot-item is-active" src="assets/media/parejo-1.webp" alt="Color cobrizo parejo en cabello largo" width="600" height="800" loading="lazy">
+              <video class="rot-item rot-video" muted loop playsinline preload="none" poster="assets/video/parejo-v1-poster.webp" aria-label="Color parejo en movimiento"><source data-src="assets/video/parejo-v1.webm" type="video/webm"><source data-src="assets/video/parejo-v1.mp4" type="video/mp4"></video>
+              <img class="rot-item" src="assets/media/parejo-2.webp" alt="Color rojo intenso parejo" width="600" height="800" loading="lazy">
             </div>
             <h3>Color Parejo</h3>
             <p class="cat-blurb">Coloración uniforme, retoque de raíz y baños de color con tratamiento incluido.</p>
             <span class="btn-pill">Ver 4 servicios</span>
           </a>
           <a class="cat-card cat-card-link" href="servicios-cortes.html">
-            <div class="cat-photo">
-              <img src="assets/images/real-bob-oscuro-700x875.webp" alt="Corte bob recto en cabello oscuro" width="700" height="875" loading="lazy">
+            <div class="cat-photo media-rotator">
+              <img class="rot-item is-active" src="assets/media/corte-1.webp" alt="Corte con ondas en rubio" width="600" height="800" loading="lazy">
+              <video class="rot-item rot-video" muted loop playsinline preload="none" poster="assets/video/corte-v1-poster.webp" aria-label="Corte de cabello en el estudio"><source data-src="assets/video/corte-v1.webm" type="video/webm"><source data-src="assets/video/corte-v1.mp4" type="video/mp4"></video>
             </div>
             <h3>Corte de Cabello</h3>
             <p class="cat-blurb">Cortes para dama y caballero, con opción de lavado, secado y plancha.</p>
             <span class="btn-pill">Ver 4 servicios</span>
           </a>
           <a class="cat-card cat-card-link" href="servicios-rizos.html">
-            <div class="cat-photo">
-              <img src="assets/images/real-rizos-caramelo-600x800.webp" alt="Cabello rizado con reflejos caramelo" width="600" height="800" loading="lazy">
+            <div class="cat-photo media-rotator">
+              <img class="rot-item is-active" src="assets/media/rizos-1.webp" alt="Rizos definidos e hidratados" width="600" height="800" loading="lazy">
+              <video class="rot-item rot-video" muted loop playsinline preload="none" poster="assets/video/rizos-v1-poster.webp" aria-label="Estilizado de rizos"><source data-src="assets/video/rizos-v1.webm" type="video/webm"><source data-src="assets/video/rizos-v1.mp4" type="video/mp4"></video>
+              <img class="rot-item" src="assets/media/rizos-2.webp" alt="Rizos cobrizos definidos tras el tratamiento" width="600" height="800" loading="lazy">
             </div>
             <h3>Tratamiento en Rizos</h3>
             <p class="cat-blurb">Tratamiento reconstructivo o nutritivo y estilizado para cabello rizado.</p>
@@ -170,8 +191,8 @@
 
     <section class="cta-banner" id="contacto-cta">
       <div class="wrap">
-        <div class="frame">
-          <img src="assets/images/real-estudio-liso-ancho-1600x800.webp" alt="Clienta con cabello liso en el estudio Amarë" width="1600" height="800" loading="lazy">
+        <div class="frame frame-split">
+          <img src="assets/media/contacto.webp" alt="Aplicación de tratamiento en cabello oscuro" width="700" height="1000" loading="lazy">
           <div class="content">
             <h2>No dudes en ponerte en contacto con nosotros.</h2>
             <p>Nuestro equipo está a tu disposición para brindarte todo el apoyo que necesitas en lo que respecta a nuestros servicios.</p>
@@ -250,6 +271,6 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 20l1.3-4.2A7.7 7.7 0 1 1 9 18.6L4 20Z"/><path d="M8.5 9.7c0 3.3 2.7 6 6 6"/></svg>
   </a>
 
-  <script src="js/main.js?v=202610101625"></script>
+  <script src="js/main.js?v=202610101800"></script>
 </body>
 </html>

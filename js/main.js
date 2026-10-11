@@ -111,8 +111,72 @@
       slides[i].classList.remove('is-active');
       i = (i + 1) % slides.length;
       slides[i].classList.add('is-active');
-    }, 5000);
+    }, 6500);
   });
+
+  /* ---------- Carrusel foto → video → foto (tarjetas de servicios y portadas) ----------
+     Todos los carruseles avanzan al mismo tiempo para que la página se vea ordenada. Los videos se
+     cargan solo cuando les toca y reinician desde el inicio cada vez que aparecen. */
+  var rotadores = Array.prototype.slice.call(document.querySelectorAll('.media-rotator'));
+  var activarVideo = function (video) {
+    var sources = video.querySelectorAll('source[data-src]');
+    if (sources.length) {
+      sources.forEach(function (source) { source.src = source.getAttribute('data-src'); source.removeAttribute('data-src'); });
+      video.load();
+    }
+    try { video.currentTime = 0; } catch (e) {}
+    var p = video.play();
+    if (p && p.catch) p.catch(function () {});
+  };
+  if (rotadores.length && !reduceMotion) {
+    var paso = 0;
+    setInterval(function () {
+      if (document.hidden) return;
+      paso++;
+      rotadores.forEach(function (box) {
+        var items = box.querySelectorAll('.rot-item');
+        if (items.length < 2) return;
+        var actual = (paso - 1) % items.length, sig = paso % items.length;
+        items[actual].classList.remove('is-active');
+        if (items[actual].tagName === 'VIDEO') items[actual].pause();
+        items[sig].classList.add('is-active');
+        if (items[sig].tagName === 'VIDEO') activarVideo(items[sig]);
+      });
+    }, 7000);
+  }
+
+  /* ---------- Videos con sonido: arrancan en silencio al verse; botón para activar el sonido ---------- */
+  var conSonido = Array.prototype.slice.call(document.querySelectorAll('video.video-con-sonido'));
+  conSonido.forEach(function (video) {
+    var caja = video.closest('.video-sonido');
+    var boton = caja && caja.querySelector('.btn-sonido');
+    var actualizar = function () { if (boton) boton.hidden = !video.muted; };
+    video.addEventListener('volumechange', function () {
+      actualizar();
+      // Solo uno con sonido a la vez
+      if (!video.muted) conSonido.forEach(function (otro) { if (otro !== video) otro.muted = true; });
+    });
+    if (boton) boton.addEventListener('click', function () {
+      video.muted = false;
+      if (video.volume === 0) video.volume = 1;
+      activarVideo(video);
+    });
+    actualizar();
+  });
+  if (conSonido.length && 'IntersectionObserver' in window) {
+    var sio = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        var video = entry.target;
+        if (entry.isIntersecting) {
+          if (video.querySelector('source[data-src]')) activarVideo(video);
+          else if (!reduceMotion || !video.muted) { var p = video.play(); if (p && p.catch) p.catch(function () {}); }
+        } else {
+          video.pause();
+        }
+      });
+    }, { threshold: 0.35 });
+    conSonido.forEach(function (v) { sio.observe(v); });
+  }
 
   /* ---------- Videos: se cargan y reproducen solo cuando están en pantalla ---------- */
   var videos = document.querySelectorAll('video.lazy-video');
