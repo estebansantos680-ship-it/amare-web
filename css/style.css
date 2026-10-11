@@ -885,7 +885,7 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
   border-radius:var(--radius-lg); overflow:hidden; background:var(--black);
   box-shadow:0 30px 70px rgba(0,0,0,.45); outline:1px solid rgba(181,164,138,.5); outline-offset:10px;
 }
-.hero-media-visual > video{ width:100%; height:100%; object-fit:cover; display:block; }
+.hero-media-visual > video, .hero-media-visual > img{ width:100%; height:100%; object-fit:cover; display:block; }
 .hero-media-visual .video-sonido{ height:100%; border-radius:0; box-shadow:none; }
 .hero-media-visual.foto{ aspect-ratio:4/5; width:min(100%, calc(68vh * 4 / 5)); }
 @media (max-width:860px){

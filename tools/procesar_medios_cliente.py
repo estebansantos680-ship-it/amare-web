@@ -68,6 +68,7 @@ FOTOS = {
     'producto-p5': ('Productos pagina/5.5.jpeg', None, 600),
     'producto-p6': ('Productos pagina/6.webp', None, 600),
     'ubicacion': ('Imagen Ubicacion.png', None, 900),
+    'reservar': ('../Reservar tu cita.jpg', (1080, 1350)),  # portada de reservar.html (imagenes/)
 }
 
 # nombre: (ruta, inicio s, duración s o None, filtro extra, velocidad)
