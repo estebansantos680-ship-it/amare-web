@@ -30,12 +30,12 @@ FOTOS = {
     # Inicio: portada (la rubia primero) y círculo de producto
     'inicio-1': ('Pagina de incio/1.JPG', (900, 1125), {'foco': (0.455, 0.42), 'zoom': 1.15}),  # centrada
     'inicio-2': ('Pagina de incio/2.jpeg', (900, 1125)),
-    'inicio-3': ('Pagina de incio/3.jpeg', (900, 1125), {'foco': (0.5, 0.0), 'zoom': 1.0}),  # se ve la parte de arriba
+    'inicio-3': ('Pagina de incio/3.jpeg', (900, 1125), {'foco': (0.5, 0.0), 'zoom': 1.0, 'aire_arriba': 0.08}),  # más abajo en el arco
     'inicio-4': ('Pagina de incio/4.jpeg', (900, 1125)),
     'inicio-5': ('Pagina de incio/5.jpeg', (900, 1125)),
     'inicio-6': ('Pagina de incio/6.jpeg', (900, 1125)),
     'inicio-7': ('Pagina de incio/8.jpeg', (900, 1125)),
-    'inicio-8': ('Pagina de incio/9.jpeg', (900, 1125), {'foco': (0.40, 0.42), 'zoom': 1.15}),  # centrada
+    'inicio-8': ('Pagina de incio/9.jpeg', (900, 1125), {'foco': (0.4, 0.36), 'zoom': 1.3, 'cara_x': 0.417}),  # centrada
     'producto-circulo': ('Productos/Producto1.png', (420, 420)),
     # "Tu imagen es el reflejo de quien eres"
     'reflejo-1': ('Tu imagen es el reflejo de quien eres/1.1.jpg', (700, 875)),
@@ -99,15 +99,27 @@ def correr(args):
     subprocess.run([FFMPEG, '-y', '-loglevel', 'error'] + args, check=True)
 
 
-def recorte(im, tam, foco=(0.5, 0.4), zoom=1.0):
-    """Recorta a la proporción de `tam` centrando en `foco` (x, y de 0 a 1); zoom > 1 acerca para poder centrar."""
+def recorte(im, tam, foco=(0.5, 0.4), zoom=1.0, cara_x=None, aire_arriba=0.0):
+    """Recorta a la proporción de `tam` centrando en `foco` (x, y de 0 a 1); zoom > 1 acerca para poder centrar.
+    cara_x: posición horizontal de la persona en el original → queda en el centro (algo a la derecha, por el Ken Burns).
+    aire_arriba: baja la foto dejando ese porcentaje arriba, rellenado con la primera fila (techo/pared lisa)."""
     rel = tam[0] / tam[1]
     w, h = im.size
     cw, ch = (w, w / rel) if w / h < rel else (h * rel, h)
     cw, ch = cw / zoom, ch / zoom
+    if cara_x is not None:
+        foco = (cara_x - 0.015 * cw / w, foco[1])
     x = min(max(foco[0] * w - cw / 2, 0), w - cw)
     y = min(max(foco[1] * h - ch / 2, 0), h - ch) if foco[1] > 0 else 0
-    return im.crop((round(x), round(y), round(x + cw), round(y + ch))).resize(tam, Image.LANCZOS)
+    out = im.crop((round(x), round(y), round(x + cw), round(y + ch))).resize(tam, Image.LANCZOS)
+    if aire_arriba:
+        alto = round(tam[1] * aire_arriba)
+        base = out.crop((0, 0, tam[0], tam[1] - alto))
+        lienzo = Image.new(out.mode, tam)
+        lienzo.paste(out.crop((0, 0, tam[0], 1)).resize((tam[0], alto)), (0, 0))
+        lienzo.paste(base, (0, alto))
+        out = lienzo
+    return out
 
 
 def fotos():

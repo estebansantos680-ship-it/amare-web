@@ -842,7 +842,7 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
    MEDIOS DEL CLIENTE (oct-2026): carruseles sincronizados, videos con sonido y banners sin desenfoque
    ========================================================= */
 /* Portada del inicio: cambio de foto más lento y elegante */
-.fade-slides img{ transition:opacity 2.4s ease-in-out; }
+.fade-slides img{ transition:opacity 2.4s ease-in-out; transform-origin:50% 15%; }
 
 /* Carrusel foto → video → foto: todas las tarjetas cambian al mismo tiempo (js/main.js) */
 .media-rotator{ position:relative; overflow:hidden; background:var(--mocha); }
