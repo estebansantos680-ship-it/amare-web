@@ -183,6 +183,7 @@
   if (videos.length && 'IntersectionObserver' in window && !reduceMotion) {
     var tryPlay = function (video) {
       if (!video._inView) return;
+      if (video.ended && !video.loop) return;   // videos sin bucle terminan en su último cuadro y ahí se quedan
       var playing = video.play();
       if (playing && playing.catch) playing.catch(function () {});
     };

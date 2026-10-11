@@ -84,6 +84,7 @@ MUDOS = {
     'cir-v1': ('Imagenes servicio/06 Cirugia capilar/Opcion de video TOP 1.mov', 0, None, '', 1),
     'cir-banner': ('Imagenes servicio/06 Cirugia capilar/Opcion de video TOP 1.mov', 5.5, 5.5, '', 1),  # donde sonríe
     'trat-v1': ('Imagenes servicio/07 tratamientos capilares/video top opcion 1.MOV', 0, None, '', 1),
+    'trat-banner': ('Imagenes servicio/07 tratamientos capilares/Video 6 Transformación Antes y Después - corta  segundo 19.mp4', 0, 19.8, '', 1),  # termina en la toma de espalda (no se repite)
     'color-v1': ('Imagenes servicio/08 Balayage/video top 3.mov', 0, None, '', 1),
     'parejo-v1': ('Imagenes servicio/09 Color Parejo/Opcion 3 video.MP4', 0, None, '', 1),
     'corte-v1': ('Imagenes servicio/10 Corte de Cabello/Video para corte minuto 251 a 3 minutos.MP4', 170, 10, 'transpose=2,', 1),
