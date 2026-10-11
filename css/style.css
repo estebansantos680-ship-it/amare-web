@@ -954,16 +954,37 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
 .hero-servicios h1{ font-size:clamp(2.2rem, 3.6vw, 3.4rem); }
 @media (min-width:761px) and (max-width:1100px){ .hero-servicios .hero-foto-texto{ max-width:340px; } }
 
-/* Sobre nosotros: portada clara (fondo 12, sin desenfoque) y CTA con foto horizontal */
-.page-hero.hero-claro{ background:#f3ece2; color:var(--ink); }
-.page-hero.hero-claro .page-hero-bg img{ opacity:1; animation:none; }
-.page-hero.hero-claro .eyebrow{ color:var(--taupe-deep); }
-.page-hero.hero-claro p{ color:var(--ink); }
+/* Sobre nosotros: portada inspirada en la foto del equipo (negro, luz dorada, vino de las cortinas, arcos del espejo) */
+.page-hero.hero-equipo{
+  padding-bottom:clamp(110px, 15vw, 190px);
+  background:
+    radial-gradient(ellipse 55% 70% at 12% 15%, rgba(181,164,138,.30), transparent 70%),
+    radial-gradient(ellipse 45% 60% at 92% 95%, rgba(110,28,38,.45), transparent 70%),
+    radial-gradient(ellipse 40% 50% at 70% 10%, rgba(214,190,150,.14), transparent 70%),
+    linear-gradient(135deg, #0B0B0B 0%, #1c1714 45%, var(--mocha) 100%);
+}
+.page-hero.hero-equipo .bg-word{
+  position:absolute; left:50%; top:46%; transform:translate(-50%, -50%); z-index:0; pointer-events:none; white-space:nowrap;
+  font-family:var(--serif); font-size:clamp(6rem, 24vw, 20rem); letter-spacing:.08em; line-height:1;
+  color:transparent; -webkit-text-stroke:1px rgba(181,164,138,.22);
+}
+.page-hero.hero-equipo .arcos,
+.page-hero.hero-equipo .arcos::before{
+  position:absolute; z-index:0; pointer-events:none; border:1px solid rgba(181,164,138,.35); border-bottom:0;
+  border-radius:999px 999px 0 0;
+}
+.page-hero.hero-equipo .arcos{ right:clamp(-60px, 4vw, 90px); bottom:0; width:clamp(160px, 22vw, 300px); height:clamp(230px, 32vw, 440px); }
+.page-hero.hero-equipo .arcos::before{ content:''; left:18px; right:18px; top:18px; bottom:0; border-color:rgba(181,164,138,.18); }
+.page-hero.hero-equipo::before{
+  content:''; position:absolute; z-index:0; pointer-events:none; left:clamp(-80px, 2vw, 60px); top:clamp(30px, 5vw, 60px);
+  width:clamp(120px, 14vw, 190px); height:clamp(170px, 20vw, 270px); border:1px solid rgba(181,164,138,.2); border-radius:999px 999px 0 0;
+}
+.page-hero.hero-equipo .linea-oro{ display:block; width:64px; height:1px; margin:0 auto 20px; background:linear-gradient(90deg, transparent, var(--taupe), transparent); }
+.page-hero.hero-equipo h1{ margin-bottom:14px; }
+@media (max-width:640px){
+  .page-hero.hero-equipo .arcos{ right:-50px; opacity:.6; }
+  .page-hero.hero-equipo::before{ left:-70px; opacity:.6; }
+}
 .cta-banner .frame.frame-split.split-ancha{ grid-template-columns:1fr 1.1fr; }
 .cta-banner .frame.frame-split.split-ancha img{ object-position:50% 30%; }
 @media (max-width:760px){ .cta-banner .frame.frame-split.split-ancha{ grid-template-columns:1fr; } }
-
-/* Foto del equipo con fondo blanco: el texto va en una franja debajo (sin degradado encima de la foto) */
-.team-photo{ aspect-ratio:auto; background:#ffffff; }
-.team-photo img{ height:auto; }
-.team-photo figcaption{ position:static; background:var(--black); }

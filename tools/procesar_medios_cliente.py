@@ -73,9 +73,8 @@ FOTOS = {
     'franja-balayage': ('Imagenes servicio/08 Balayage/1.jpeg', (600, 800), {'foco': (0.5, 0.0), 'zoom': 1.12, 'cara_x': 0.535, 'aire_arriba': 0.07}),  # "Especialistas en color" del inicio
     'reservar': ('../Reservar tu cita.jpg', (1080, 1350)),  # portada de reservar.html (imagenes/)
     # Sobre nosotros: foto junto al texto, CTA de servicios y fondo de la portada
-    'nosotros-balayage': ('Imagenes servicio/08 Balayage/4.jpeg', (700, 875), {'foco': (0.5, 0.3), 'zoom': 1.0}),
+    'nosotros-balayage2': ('Imagenes servicio/08 Balayage/4.jpeg', (660, 880)),  # 3:4 completa (se ven las puntas)
     'nosotros-cta': ('11.jpg', None, 1200),
-    'nosotros-fondo': ('12.png', None, 2000),
 }
 
 # nombre: (ruta, inicio s, duración s o None, filtro extra, velocidad)
