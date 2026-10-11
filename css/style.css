@@ -1006,3 +1006,13 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
   100%{ transform:scale(1); }
 }
 .strip-photo.motion img{ animation-name:kenburns-suave; transform-origin:50% 50%; }
+
+/* Precios con descuento (desde el panel, js/precios.js): normal tachado y el nuevo más grande y en negrita */
+.price-tier .precio-antes,
+.length-option .precio-antes{ display:block; font-family:var(--sans); font-size:.78rem; color:var(--muted); text-decoration:line-through; text-decoration-thickness:1px; }
+.price-tier .precio-oferta{ display:block; font-weight:700; font-size:1.32rem; color:var(--black); margin-top:2px; }
+.length-option .precio-oferta{ display:block; font-weight:700; font-size:1.12rem; color:var(--black); }
+.length-option.selected .precio-oferta{ color:var(--taupe); }
+.price-tier.con-oferta{ background:#fff; box-shadow:inset 0 0 0 1px var(--taupe); }
+.badge.badge-oferta{ background:var(--black); border-color:var(--black); color:var(--cream); }
+@media (max-width:640px){ .price-tier .precio-oferta{ font-size:1.12rem; } }

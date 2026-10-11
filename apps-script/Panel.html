@@ -157,6 +157,19 @@
   .resumen-cli{ display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:8px; margin:10px 0; font-size:13px; }
   .resumen-cli span{ display:block; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--taupe-deep); }
   .hoja.ancha{ max-width:620px; }
+  .pr-modos{ display:flex; gap:6px; margin:12px 0 4px; }
+  .pr-modos .btn{ flex:1; padding:10px 8px; }
+  .pr-tabla{ width:100%; border-collapse:collapse; margin:10px 0; font-size:13px; }
+  .pr-tabla th{ font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--taupe-deep); font-weight:600; text-align:left; padding:4px 6px; }
+  .pr-tabla td{ padding:5px 6px; border-top:1px solid var(--line); vertical-align:middle; }
+  .pr-tabla input{ width:100%; min-width:70px; padding:8px; font:inherit; border:1px solid var(--line); }
+  .pr-tabla .antes{ color:var(--muted); white-space:nowrap; }
+  .pr-tabla .web{ display:block; font-size:11px; color:var(--muted); }
+  .pr-lista{ display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 2px; }
+  .pr-lista button{ border:1px solid var(--line); background:#fff; padding:6px 10px; font:inherit; font-size:12px; cursor:pointer; }
+  .pr-lista button.oferta{ border-color:var(--bad); color:var(--bad); }
+  .pr-pct{ display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-top:6px; }
+  .pr-pct input{ width:90px; }
   header .der button.prim{ background:var(--cream); color:var(--black); }
   @media (max-width:640px){ header .der button{ padding:8px 7px; letter-spacing:.04em; white-space:nowrap; } .der{ gap:6px; } .logo small{ letter-spacing:.15em; } .logo{ font-size:18px; } }
 </style>
@@ -168,6 +181,7 @@
   <div class="der"><span id="sync"></span>
     <button class="prim" onclick="pedirCitaManual()" title="Agregar una cita desde el panel">+ Cita</button>
     <button onclick="pedirBloqueo()" title="Bloquear un espacio (vacaciones, ausencias…)">Bloquear</button>
+    <button onclick="pedirPrecios()" title="Cambiar precios de los servicios o ponerles descuento">Precios</button>
     <button onclick="cargar()">Actualizar</button></div>
 </header>
 <main>
@@ -1214,6 +1228,139 @@
     pintar();
     COLA.push({ fn: 'quitarBloqueo', args: [eventoId], textoListo: 'Bloqueo quitado ✓' });
     procesarCola();
+  }
+
+  /* ---------- Precios y descuentos ----------
+     Parte de los precios de la web (services-data.js) y guarda solo los cambios. "Cambiar precio" = precio normal
+     (la web lo muestra igual que siempre). "Poner descuento" = la web tacha el precio normal y destaca el nuevo. */
+  var PRECIOS = null, PR = { servicio: '', modo: 'normal' };
+  var LARGOS = ['Corto', 'Mediano', 'Largo', 'Extra largo'];
+  function svcPorNombre(n){ return (window.AMARE_SERVICES || []).filter(function(s){ return s.servicio === n; })[0]; }
+  function prUnico(s){ var t = LARGOS.map(function(l){ return s.tiers[l]; }); return t.every(function(x){ return x.min === t[0].min && x.max === t[0].max; }); }
+  function prRango(s){ return LARGOS.some(function(l){ return s.tiers[l].min !== s.tiers[l].max; }); }
+  function prNormal(s, l){ var p = PRECIOS[s.servicio]; return (p && p.normal && p.normal[l]) || [s.tiers[l].min, s.tiers[l].max]; }
+  function prTexto(v){ return v[0] === v[1] ? colones(v[0]) : colones(v[0]) + ' – ' + colones(v[1]); }
+  function prNum(id){ var el = document.getElementById(id); return el ? Number(String(el.value).replace(/\D/g, '')) || 0 : 0; }
+  function pedirPrecios(){
+    var hoja = document.getElementById('hoja');
+    hoja.className = 'hoja ancha form-panel';
+    hoja.innerHTML = '<span class="chip">Precios</span><h3>Precios y descuentos</h3><p class="nota">Cargando precios…</p>';
+    document.getElementById('modal').classList.add('abierto');
+    google.script.run.withSuccessHandler(function(p){ PRECIOS = p || {}; pintarPrecios(); })
+      .withFailureHandler(function(e){ hoja.innerHTML = '<p class="nota">' + esc(e.message) + '</p>'; }).obtenerPrecios();
+  }
+  function elegirPrecio(btn){ PR.servicio = btn.getAttribute('data-n'); PR.modo = btn.getAttribute('data-m'); pintarPrecios(); }
+  function modoPrecio(m){ PR.modo = m; pintarPrecios(); }
+  function pintarPrecios(){
+    var svcs = window.AMARE_SERVICES || [], hoja = document.getElementById('hoja');
+    if (!svcs.length) { hoja.innerHTML = '<p class="nota">No se pudo cargar la lista de servicios de la web. Recarga el panel.</p>'; return; }
+    if (!PR.servicio || !svcPorNombre(PR.servicio)) PR.servicio = svcs[0].servicio;
+    var cats = [];
+    svcs.forEach(function(s){ if (cats.indexOf(s.categoria) < 0) cats.push(s.categoria); });
+    var opciones = cats.map(function(c){
+      return '<optgroup label="' + esc(c) + '">' + svcs.filter(function(s){ return s.categoria === c; }).map(function(s){
+        var p = PRECIOS[s.servicio], marca = p && p.oferta ? ' · con descuento' : (p && p.normal ? ' · precio cambiado' : '');
+        return '<option value="' + esc(s.servicio) + '"' + (s.servicio === PR.servicio ? ' selected' : '') + '>' + esc(s.servicio + marca) + '</option>';
+      }).join('') + '</optgroup>';
+    }).join('');
+    var cambiados = Object.keys(PRECIOS).filter(function(n){ return svcPorNombre(n); });
+    var lista = cambiados.length ? '<label style="margin-top:10px">Servicios con cambios</label><div class="pr-lista">' + cambiados.map(function(n){
+      var p = PRECIOS[n];
+      return '<button class="' + (p.oferta ? 'oferta' : '') + '" data-n="' + esc(n) + '" data-m="' + (p.oferta ? 'oferta' : 'normal') + '" onclick="elegirPrecio(this)">' +
+        esc(n) + (p.oferta ? ' · descuento' : ' · precio') + '</button>';
+    }).join('') + '</div>' : '';
+    hoja.innerHTML = '<span class="chip">Precios</span><h3>Precios y descuentos</h3>' +
+      '<p class="nota">Los cambios se ven en la web en unos minutos y también se usan al reservar (precio y depósito).</p>' + lista +
+      '<label style="margin-top:12px">Servicio</label><select id="pr-svc" style="width:100%" onchange="PR.servicio=this.value;pintarPrecios()">' + opciones + '</select>' +
+      '<div class="pr-modos">' +
+        '<button class="btn' + (PR.modo === 'normal' ? '' : ' sec') + '" onclick="modoPrecio(\'normal\')">Cambiar precio</button>' +
+        '<button class="btn' + (PR.modo === 'oferta' ? '' : ' sec') + '" onclick="modoPrecio(\'oferta\')">Poner descuento</button>' +
+      '</div><div id="pr-editor"></div>';
+    pintarEditorPrecio();
+  }
+  /** Filas del editor: un solo "Precio" si todos los largos cuestan lo mismo; si no, una fila por largo. */
+  function prFilas(s){ return prUnico(s) ? [['Precio', LARGOS]] : LARGOS.map(function(l){ return [l, [l]]; }); }
+  function prInputs(id, v, rango){
+    return rango ? '<td><input id="' + id + '-a" inputmode="numeric" value="' + (v ? v[0] : '') + '" placeholder="Desde"></td>' +
+                   '<td><input id="' + id + '-b" inputmode="numeric" value="' + (v ? v[1] : '') + '" placeholder="Hasta"></td>'
+                 : '<td colspan="2"><input id="' + id + '-a" inputmode="numeric" value="' + (v ? v[0] : '') + '" placeholder="Precio"></td>';
+  }
+  function pintarEditorPrecio(){
+    var s = svcPorNombre(PR.servicio), p = PRECIOS[s.servicio] || {}, rango = prRango(s), filas = prFilas(s), html;
+    if (PR.modo === 'normal') {
+      html = '<p class="nota">Precio normal: en la web se ve igual que siempre, sin tachar.</p>' +
+        '<table class="pr-tabla"><tr><th>Largo</th><th colspan="2">Precio normal (₡)</th></tr>' +
+        filas.map(function(f, i){
+          var l = f[1][0], web = [s.tiers[l].min, s.tiers[l].max], cambiado = p.normal && p.normal[l];
+          return '<tr><td>' + f[0] + (cambiado ? '<span class="web">En la web era ' + prTexto(web) + '</span>' : '') + '</td>' +
+            prInputs('pr-n' + i, prNormal(s, l), rango) + '</tr>';
+        }).join('') + '</table>' +
+        '<div class="acciones"><button class="btn" onclick="guardarPrecioPanel(\'normal\')">Guardar precio</button>' +
+        (p.normal ? '<button class="btn sec" onclick="quitarPrecioPanel(\'normal\')">Volver al precio original</button>' : '') +
+        '<button class="btn sec" onclick="cerrarModal()">Cerrar</button></div>';
+    } else {
+      html = '<p class="nota">Descuento: en la web se tacha el precio normal y el nuevo se ve más grande y en negrita. ' +
+        'Deja en blanco los largos sin descuento.</p>' +
+        '<div class="pr-pct"><div><label>% de descuento</label><input id="pr-pct" inputmode="numeric" placeholder="Ej. 15"></div>' +
+        '<button class="btn sec" onclick="aplicarPorcentaje()">Calcular</button></div>' +
+        '<table class="pr-tabla"><tr><th>Largo</th><th>Antes</th><th colspan="2">Con descuento (₡)</th></tr>' +
+        filas.map(function(f, i){
+          var l = f[1][0], o = p.oferta && p.oferta[l];
+          return '<tr><td>' + f[0] + '</td><td class="antes">' + prTexto(prNormal(s, l)) + '</td>' + prInputs('pr-o' + i, o, rango) + '</tr>';
+        }).join('') + '</table>' +
+        '<div class="campos"><div><label>Vence <small>(opcional)</small></label><input type="date" id="pr-vence" value="' + esc(p.vence || '') + '"></div>' +
+        '<div><label>Texto <small>(opcional)</small></label><input id="pr-etiqueta" maxlength="40" value="' + esc(p.etiqueta || '') + '" placeholder="Ej. Promo de octubre"></div></div>' +
+        '<div class="acciones"><button class="btn" onclick="guardarPrecioPanel(\'oferta\')">Guardar descuento</button>' +
+        (p.oferta ? '<button class="btn sec" onclick="quitarPrecioPanel(\'oferta\')">Quitar descuento</button>' : '') +
+        '<button class="btn sec" onclick="cerrarModal()">Cerrar</button></div>';
+    }
+    document.getElementById('pr-editor').innerHTML = html;
+  }
+  /** Llena los precios con descuento a partir del % (redondeado a ₡500). */
+  function aplicarPorcentaje(){
+    var pct = prNum('pr-pct'), s = svcPorNombre(PR.servicio), rango = prRango(s);
+    if (!(pct > 0 && pct < 100)) return aviso('Escribe un porcentaje entre 1 y 99.', true);
+    function red(n){ return Math.round(n * (100 - pct) / 100 / 500) * 500; }
+    prFilas(s).forEach(function(f, i){
+      var v = prNormal(s, f[1][0]);
+      document.getElementById('pr-o' + i + '-a').value = red(v[0]);
+      if (rango) document.getElementById('pr-o' + i + '-b').value = red(v[1]);
+    });
+  }
+  function guardarPrecioPanel(tipo){
+    var s = svcPorNombre(PR.servicio), rango = prRango(s), valores = {}, error = '';
+    prFilas(s).forEach(function(f, i){
+      var id = (tipo === 'normal' ? 'pr-n' : 'pr-o') + i, a = prNum(id + '-a'), b = rango ? prNum(id + '-b') : a;
+      var de = f[0] === 'Precio' ? '' : ' de ' + f[0];
+      if (!a && !b) { if (tipo === 'normal') error = error || 'Escribe el precio' + de + '.'; return; }
+      if (!a || !b || b < a) { error = error || 'Revisa el precio' + de + ': el "desde" no puede ser mayor que el "hasta".'; return; }
+      f[1].forEach(function(l){
+        var n = prNormal(s, l), web = [s.tiers[l].min, s.tiers[l].max];
+        if (tipo === 'oferta') {
+          if (a >= n[0] && b >= n[1]) error = error || 'El descuento' + de + ' debe ser menor que el precio normal (' + prTexto(n) + ').';
+          valores[l] = [a, b];
+        } else if (a !== web[0] || b !== web[1]) valores[l] = [a, b]; // solo se guarda lo que cambia respecto a la web
+      });
+    });
+    if (error) return aviso(error, true);
+    if (tipo === 'oferta' && !Object.keys(valores).length) return aviso('Escribe al menos un precio con descuento.', true);
+    var p = PRECIOS[s.servicio] || {};
+    if (tipo === 'normal' && !Object.keys(valores).length && !p.normal) return aviso('Es el mismo precio de la web: no hay cambios que guardar.');
+    var vence = tipo === 'oferta' ? document.getElementById('pr-vence').value : '';
+    var etiqueta = tipo === 'oferta' ? document.getElementById('pr-etiqueta').value : '';
+    if (vence && DATOS.hoy && vence < DATOS.hoy) return aviso('La fecha de vencimiento ya pasó.', true);
+    enviarPrecio(s.servicio, tipo, valores, vence, etiqueta,
+      (tipo === 'oferta' ? 'Descuento guardado' : 'Precio guardado') + ' ✓ Se verá en la web en unos minutos.');
+  }
+  function quitarPrecioPanel(tipo){
+    if (!confirm(tipo === 'oferta' ? '¿Quitar el descuento de este servicio?' : '¿Volver al precio original de la web?')) return;
+    enviarPrecio(PR.servicio, tipo, {}, '', '', tipo === 'oferta' ? 'Descuento quitado ✓' : 'Precio original restablecido ✓');
+  }
+  function enviarPrecio(nombre, tipo, valores, vence, etiqueta, texto){
+    aviso('Guardando…');
+    google.script.run.withSuccessHandler(function(res){ PRECIOS = (res && res.precios) || {}; aviso(texto); pintarPrecios(); })
+      .withFailureHandler(function(e){ aviso(e.message, true); })
+      .guardarPrecio(nombre, tipo, valores, vence, etiqueta);
   }
 
   function cargar(){

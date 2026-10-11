@@ -59,6 +59,32 @@
     return tier.min === tier.max ? money(tier.min) : money(tier.min) + ' – ' + money(tier.max);
   }
 
+  /** Para la opción de largo: con descuento, el precio normal tachado y el nuevo en negrita. */
+  function priceRangeHtml(tier) {
+    if (!tier.antes) return priceRangeLabel(tier);
+    return '<s class="precio-antes">' + priceRangeLabel({ min: tier.antes[0], max: tier.antes[1] }) + '</s>' +
+      '<strong class="precio-oferta">' + priceRangeLabel(tier) + '</strong>';
+  }
+
+  /* Precios y descuentos del panel (js/precios.js): se aplican sobre los de services-data.js. Con descuento,
+     el precio que cuenta para la reserva y el depósito es el de oferta; tier.antes guarda el normal para mostrarlo tachado. */
+  function aplicarPrecios(precios) {
+    SERVICES.forEach(function (s) {
+      var p = precios[s.servicio];
+      if (!p) return;
+      Object.keys(s.tiers).forEach(function (largo) {
+        var t = s.tiers[largo];
+        var normal = (p.normal && p.normal[largo]) || [t.min, t.max];
+        var oferta = p.oferta && p.oferta[largo];
+        t.min = (oferta || normal)[0];
+        t.max = (oferta || normal)[1];
+        t.antes = oferta ? normal : null;
+      });
+    });
+    // Si ya está en el paso del largo y aún no eligió, se vuelve a pintar con los precios nuevos.
+    if (state.service && !state.tier && els.lengthGrid && els.lengthGrid.offsetParent) renderStep2();
+  }
+
   function hoursLabel(h) {
     if (h == null) return null;
     if (h < 1) return Math.round(h * 60) + ' min';
@@ -263,7 +289,7 @@
       div.setAttribute('data-length', label);
       div.innerHTML =
         '<span class="len-label">' + label + '</span>' +
-        '<span class="len-price">' + priceRangeLabel(tier) + '</span>';
+        '<span class="len-price">' + priceRangeHtml(tier) + '</span>';
       div.addEventListener('click', function () {
         els.lengthGrid.querySelectorAll('.length-option').forEach(function (el) {
           el.classList.remove('selected');
@@ -1281,6 +1307,7 @@
     }).then(function (r) { return r.json(); });
   }
 
+  if (window.amarePrecios) window.amarePrecios.then(aplicarPrecios);
   if (!reservaEnviadaAlVolver()) preseleccionarDesdeURL();
 
 })();

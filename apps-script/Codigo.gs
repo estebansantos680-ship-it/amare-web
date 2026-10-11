@@ -304,6 +304,7 @@ function doGet(e) {
       bloqueos: bloqueosCompat_(dias, cerrados, modos, aj) // para páginas con la versión anterior en caché
     });
   }
+  if (accion === 'precios') return json_({ ok: true, precios: preciosPublicos_() });
   if (!esAdmin_()) {
     return HtmlService.createHtmlOutput(
       '<p style="font-family:sans-serif;padding:40px">Acceso restringido. Inicia sesión con la cuenta de administración de Amarë.</p>');
@@ -777,6 +778,76 @@ function guardarAjustes(limiteHoras, tope) {
   if (!(tope >= 1 && tope <= 50)) throw new Error('Las citas por franja deben estar entre 1 y 50.');
   PropertiesService.getScriptProperties().setProperties({ LIMITE_HORAS_DIA: String(limiteHoras), TOPE_DIA: String(Math.round(tope)) });
   return ajustes_();
+}
+
+// ------------------------------------------------------------------ Precios y descuentos (desde el panel)
+// La web parte de sus precios (js/services-data.js) y aplica estos cambios encima. Cada servicio con cambios
+// se guarda en la propiedad "PRECIO|<nombre del servicio>":
+//   { normal: { Corto: [min, max], ... }, oferta: { Corto: [min, max], ... }, vence: 'yyyy-MM-dd', etiqueta: '' }
+var PREFIJO_PRECIO_ = 'PRECIO|';
+var LARGOS_ = ['Corto', 'Mediano', 'Largo', 'Extra largo'];
+
+function preciosGuardados_() {
+  var todas = PropertiesService.getScriptProperties().getProperties(), out = {};
+  Object.keys(todas).forEach(function (k) {
+    if (k.indexOf(PREFIJO_PRECIO_) !== 0) return;
+    try { out[k.slice(PREFIJO_PRECIO_.length)] = JSON.parse(todas[k]); } catch (e) {}
+  });
+  return out;
+}
+
+/** Lo que ve la web: precios normales cambiados y descuentos vigentes (un descuento vencido deja de enviarse). */
+function preciosPublicos_() {
+  var cache = CacheService.getScriptCache(), guardado = cache.get('precios_publicos');
+  if (guardado) return JSON.parse(guardado);
+  var hoy = Utilities.formatDate(new Date(), CONFIG.ZONA, 'yyyy-MM-dd'), todos = preciosGuardados_(), out = {};
+  Object.keys(todos).forEach(function (nombre) {
+    var p = todos[nombre], x = {};
+    if (p.normal && Object.keys(p.normal).length) x.normal = p.normal;
+    if (p.oferta && Object.keys(p.oferta).length && (!p.vence || p.vence >= hoy)) {
+      x.oferta = p.oferta;
+      if (p.vence) x.vence = p.vence;
+      if (p.etiqueta) x.etiqueta = p.etiqueta;
+    }
+    if (x.normal || x.oferta) out[nombre] = x;
+  });
+  cache.put('precios_publicos', JSON.stringify(out), 300);
+  return out;
+}
+
+function obtenerPrecios() {
+  exigirAdmin_();
+  return preciosGuardados_();
+}
+
+/**
+ * Guarda el precio normal o el descuento de un servicio.
+ * tipo: 'normal' | 'oferta'. valores: { Corto: [min, max], ... }; vacío = volver al precio de la web / quitar el descuento.
+ */
+function guardarPrecio(nombre, tipo, valores, vence, etiqueta) {
+  exigirAdmin_();
+  nombre = String(nombre || '').trim();
+  if (!nombre) throw new Error('Falta el servicio.');
+  if (['normal', 'oferta'].indexOf(tipo) < 0) throw new Error('Tipo inválido.');
+  var limpio = {};
+  Object.keys(valores || {}).forEach(function (largo) {
+    if (LARGOS_.indexOf(largo) < 0) throw new Error('Largo inválido: ' + largo);
+    var v = valores[largo] || [], a = Math.round(Number(v[0])), b = Math.round(Number(v[1] || v[0]));
+    if (!(a > 0 && b >= a && b <= 5000000)) throw new Error('Revisa el precio de ' + largo + ': debe ser mayor que 0 y el mínimo no puede pasar al máximo.');
+    limpio[largo] = [a, b];
+  });
+  if (vence && !/^\d{4}-\d{2}-\d{2}$/.test(vence)) throw new Error('Fecha de vencimiento inválida.');
+  var props = PropertiesService.getScriptProperties(), clave = PREFIJO_PRECIO_ + nombre, p = {};
+  try { p = JSON.parse(props.getProperty(clave) || '{}'); } catch (e) {}
+  if (Object.keys(limpio).length) p[tipo] = limpio; else delete p[tipo];
+  if (tipo === 'oferta') {
+    if (p.oferta) { p.vence = vence || ''; p.etiqueta = String(etiqueta || '').trim().slice(0, 40); }
+    else { delete p.vence; delete p.etiqueta; }
+  }
+  p.actualizado = Utilities.formatDate(new Date(), CONFIG.ZONA, 'yyyy-MM-dd HH:mm');
+  if (p.normal || p.oferta) props.setProperty(clave, JSON.stringify(p)); else props.deleteProperty(clave);
+  CacheService.getScriptCache().remove('precios_publicos');
+  return { precios: preciosGuardados_() };
 }
 
 // ------------------------------------------------------------------ Panel de administración
