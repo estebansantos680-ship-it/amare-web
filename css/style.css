@@ -595,7 +595,7 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
 .pago-monto small{ font-family:var(--sans); font-size:.78rem; color:var(--muted); }
 .pago-pasos{ margin:16px 0 18px 18px; color:var(--ink); font-size:.9rem; }
 .pago-pasos li{ margin-bottom:12px; padding-left:4px; }
-.pago-dato{ display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px; }
+.pago-dato{ display:flex; width:fit-content; max-width:100%; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; }
 .pago-dato code{ font-family:var(--sans); font-weight:600; font-size:.95rem; background:var(--cream); border:1px solid var(--line); padding:5px 10px; letter-spacing:.04em; word-break:break-all; }
 .btn-copiar{ border:1px solid var(--line); background:transparent; padding:5px 10px; font-size:.6rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; cursor:pointer; font-family:inherit; }
 .btn-copiar:hover{ border-color:var(--black); }
@@ -616,7 +616,9 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
 .booking-panel .upload-zona[hidden], .upload-preview[hidden], .pago-box[hidden]{ display:none; }
 .pago-box .pago-titulo{ font-size:.72rem; color:var(--black); }
 .pago-link-leyenda{ font-size:.86rem; color:var(--ink); margin:10px 0 4px; }
-.btn-link-pago{ display:inline-block; margin-top:12px; }
+/* Botón "Solicitar link de pago": mismo fondo y borde que los datos de SINPE e IBAN */
+.btn-link-pago{ display:inline-block; font-family:var(--sans); font-weight:600; font-size:.82rem; letter-spacing:.06em; text-transform:uppercase; background:var(--cream); border:1px solid var(--line); padding:6px 12px; color:var(--black); transition:.25s; }
+.btn-link-pago:hover{ border-color:var(--black); background:#fff; }
 /* Fotos del cabello (paso 4) */
 .fotos-cabello{ border:1px solid var(--line); background:#fff; padding:18px; margin:14px 0 6px; }
 .fotos-cabello[hidden]{ display:none; }
