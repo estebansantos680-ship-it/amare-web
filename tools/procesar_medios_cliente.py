@@ -75,6 +75,7 @@ FOTOS = {
     # Sobre nosotros: foto junto al texto, CTA de servicios y fondo de la portada
     'nosotros-balayage2': ('Imagenes servicio/08 Balayage/4.jpeg', (660, 880)),  # 3:4 completa (se ven las puntas)
     'nosotros-cta': ('11.jpg', None, 1200),
+    'inicio-cta': ('2.11.jpg', None, 736),  # banner "Tu momento Amarë" del inicio (vertical, fondo rosado)
 }
 
 # nombre: (ruta, inicio s, duración s o None, filtro extra, velocidad)
