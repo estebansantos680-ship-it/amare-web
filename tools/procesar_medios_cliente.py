@@ -28,14 +28,14 @@ FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 # nombre: (ruta relativa a ORIGEN, (ancho, alto) o None = conservar proporción con ancho máx., ancho máx.)
 FOTOS = {
     # Inicio: portada (la rubia primero) y círculo de producto
-    'inicio-1': ('Pagina de incio/1.JPG', (900, 1125)),
+    'inicio-1': ('Pagina de incio/1.JPG', (900, 1125), {'foco': (0.455, 0.42), 'zoom': 1.15}),  # centrada
     'inicio-2': ('Pagina de incio/2.jpeg', (900, 1125)),
-    'inicio-3': ('Pagina de incio/3.jpeg', (900, 1125)),
+    'inicio-3': ('Pagina de incio/3.jpeg', (900, 1125), {'foco': (0.5, 0.0), 'zoom': 1.0}),  # se ve la parte de arriba
     'inicio-4': ('Pagina de incio/4.jpeg', (900, 1125)),
     'inicio-5': ('Pagina de incio/5.jpeg', (900, 1125)),
     'inicio-6': ('Pagina de incio/6.jpeg', (900, 1125)),
     'inicio-7': ('Pagina de incio/8.jpeg', (900, 1125)),
-    'inicio-8': ('Pagina de incio/9.jpeg', (900, 1125)),
+    'inicio-8': ('Pagina de incio/9.jpeg', (900, 1125), {'foco': (0.40, 0.42), 'zoom': 1.15}),  # centrada
     'producto-circulo': ('Productos/Producto1.png', (420, 420)),
     # "Tu imagen es el reflejo de quien eres"
     'reflejo-1': ('Tu imagen es el reflejo de quien eres/1.1.jpg', (700, 875)),
@@ -99,13 +99,26 @@ def correr(args):
     subprocess.run([FFMPEG, '-y', '-loglevel', 'error'] + args, check=True)
 
 
+def recorte(im, tam, foco=(0.5, 0.4), zoom=1.0):
+    """Recorta a la proporción de `tam` centrando en `foco` (x, y de 0 a 1); zoom > 1 acerca para poder centrar."""
+    rel = tam[0] / tam[1]
+    w, h = im.size
+    cw, ch = (w, w / rel) if w / h < rel else (h * rel, h)
+    cw, ch = cw / zoom, ch / zoom
+    x = min(max(foco[0] * w - cw / 2, 0), w - cw)
+    y = min(max(foco[1] * h - ch / 2, 0), h - ch) if foco[1] > 0 else 0
+    return im.crop((round(x), round(y), round(x + cw), round(y + ch))).resize(tam, Image.LANCZOS)
+
+
 def fotos():
     os.makedirs(MEDIA, exist_ok=True)
     for nombre, spec in FOTOS.items():
         ruta = os.path.join(ORIGEN, spec[0])
         im = ImageOps.exif_transpose(Image.open(ruta))
         im = im.convert('RGBA' if im.mode in ('RGBA', 'LA', 'P') else 'RGB')
-        if spec[1]:
+        if spec[1] and len(spec) > 2 and isinstance(spec[2], dict):
+            im = recorte(im, spec[1], **spec[2])
+        elif spec[1]:
             im = ImageOps.fit(im, spec[1], Image.LANCZOS, centering=(0.5, 0.4))
         else:
             maximo = spec[2]
