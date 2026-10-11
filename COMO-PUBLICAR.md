@@ -4,6 +4,7 @@
 - **Repositorio:** https://github.com/estebansantos680-ship-it/amare-web
 - **Hosting:** GitHub Pages (rama `main`, carpeta raíz)
 - **Dominio:** amarecr.com, comprado y administrado en Cloudflare
+- **¿Vas a ayudar con cambios?** Lee primero [GUIA-COLABORADORES.md](GUIA-COLABORADORES.md).
 
 ---
 
