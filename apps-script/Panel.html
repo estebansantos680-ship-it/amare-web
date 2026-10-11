@@ -204,7 +204,7 @@
   var CARGA = {};          // fecha -> ocupación, calculada aquí mismo para que sea instantánea
   var CACHE = {};          // fecha -> eventos de Google Calendar de ese día
   var VISTA = [];          // eventos pintados en la agenda (para abrir el detalle)
-  var TAB = 'por_agendar';
+  var TAB = 'cita_confirmada';
   var SEMANA = '';         // lunes de la semana visible en Agenda
   var PX_HORA = 44, H0 = 8, H1 = 19;
   var DIAS_CERRADOS = [0, 1];
@@ -212,7 +212,6 @@
   var TABS = [
     ['agenda', 'Agenda'],
     ['requiere_aprobacion', 'Requiere aprobación'],
-    ['por_agendar', 'Por agendar'],
     ['cita_confirmada', 'Confirmadas'],
     ['historial', 'Historial']
   ];
@@ -389,9 +388,12 @@
 
   // ---------------------------------------------------------------- pestañas
   /** Reserva web que se agendó sola y el salón todavía no revisó (ajustar duración real). */
-  function porRevisar(r){ return r.estado === 'cita_confirmada' && !r.revisada && r.origen === 'web'; }
+  // Las reservas web que cumplen las reglas quedan confirmadas y agendadas con la duración máxima: ya no hay paso
+  // "Por agendar" ni revisión de duración (se deja la función para no tocar el resto del panel).
+  function porRevisar(r){ return false; }
   function enTab(r, tab){
-    if (tab === 'requiere_aprobacion') return r.estado === 'requiere_aprobacion' || r.estado === 'pago_por_validar';
+    // También los estados antiguos que aún necesitan fecha u hora (flujo de pago anterior).
+    if (tab === 'requiere_aprobacion') return ['requiere_aprobacion', 'pago_por_validar', 'pago_aprobado', 'dia_saturado', 'cita_agendada'].indexOf(r.estado) >= 0;
     if (tab === 'por_agendar') return r.estado === 'pago_aprobado' || r.estado === 'dia_saturado' || r.estado === 'cita_agendada' || porRevisar(r);
     if (tab === 'cita_confirmada') return r.estado === 'cita_confirmada' && !porRevisar(r);
     if (tab === 'historial') return ['pago_rechazado', 'cancelada', 'completada', 'no_asistio'].indexOf(r.estado) >= 0;
@@ -965,7 +967,7 @@
       if (porRevisar(r)) op('Horario correcto', 'Pasa a Confirmadas sin cambiar nada. Sin aviso.', function(){ revisada(id); }, 'ok');
       if (e === 'requiere_aprobacion') op('Aprobar y agendar', 'Se agenda a la hora que pidió y se le envía la confirmación (WhatsApp y correo).', function(){ aprobarRes(id); }, 'ok');
       if (e === 'cita_agendada') op('Confirmar cita', 'Se le envía el correo "cita confirmada".', function(){ confirmar(id); }, 'ok');
-      if (e === 'pago_aprobado' || e === 'dia_saturado') return { motivo: 'Primero ponle fecha y hora en "Por agendar" (Paso 1).' };
+      if (e === 'pago_aprobado' || e === 'dia_saturado') return { motivo: 'Primero ábrela en "Requiere aprobación" y ponle fecha y hora.' };
       if ((e === 'completada' || e === 'no_asistio') && r.fecha_cita) op('Volver a confirmadas', 'Sin correo.', function(){ cambiar(id, 'cita_confirmada'); }, 'sec');
     }
     if (tab === 'historial') {
@@ -1077,7 +1079,7 @@
   function aprobarRes(id){
     var r = reservaPorId(id); if (!r) return;
     var ini = r.hora_solicitada || (r.franja === 'Tarde' ? '13:00' : '09:00');
-    accion(id, 'aprobarReserva', [id], { estado: 'cita_confirmada', revisada: '', fecha_cita: r.fecha_solicitada, hora_inicio: ini,
+    accion(id, 'aprobarReserva', [id], { estado: 'cita_confirmada', revisada: 'sí', fecha_cita: r.fecha_solicitada, hora_inicio: ini,
       hora_fin: sumarHoras(ini, Number(r.dur_max_h) || Number(r.dur_min_h) || 2) }, 'Aprobada y agendada. Enviando confirmación…', 'Confirmación enviada ✓', true);
   }
   function noAprobar(id){

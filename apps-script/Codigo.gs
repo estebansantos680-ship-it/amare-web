@@ -14,7 +14,7 @@
  *  - Envía recordatorios 3 días y 1 día antes de cada cita confirmada (disparador cada 15 min).
  *
  * Ciclo de estados (desde 10-oct-2026 ya no hay validación de pago antes de confirmar):
- *   web "Permitir"            → cita_confirmada (revisada vacía = "Por agendar") → revisada → completada / no_asistio
+ *   web "Permitir"            → cita_confirmada (agendada sola con la duración máxima estimada) → completada / no_asistio
  *   web "Requiere aprobación" → requiere_aprobacion → (aprobar) cita_confirmada / dia_saturado / cancelada
  *   cita manual del panel     → cita_confirmada (revisada)
  *   Estados antiguos (pago_por_validar, pago_aprobado, cita_agendada) se siguen mostrando y se pueden agendar.
@@ -375,7 +375,7 @@ function doPost(e) {
     if (r.estado === ESTADOS.CITA_CONFIRMADA) {
       r = buscarReserva_(r.id);
       ponerEnCalendario_(r, r.fecha_solicitada, r.hora_solicitada, sumarHoras_(r.hora_solicitada, duracionEstimada_(r)));
-      actualizarReserva_(r, {}, 'agendada automáticamente en Google Calendar (duración estimada, por revisar)');
+      actualizarReserva_(r, { revisada: 'sí' }, 'agendada automáticamente en Google Calendar (duración máxima estimada)');
       avisarClienta_(r, 'confirmada');
     } else {
       avisarClienta_(r, 'revision');
@@ -1026,7 +1026,7 @@ function aprobarReserva(id) {
   if (r.estado !== ESTADOS.REQUIERE_APROBACION) throw new Error('Esa reserva no está pendiente de aprobación.');
   var ini = r.hora_solicitada || (r.franja === 'Tarde' ? '13:00' : '09:00');
   ponerEnCalendario_(r, r.fecha_solicitada, ini, sumarHoras_(ini, duracionEstimada_(r)));
-  actualizarReserva_(r, { estado: ESTADOS.CITA_CONFIRMADA, revisada: '', motivo: '' }, 'aprobada y agendada ' + r.fecha_cita + ' ' + r.hora_inicio);
+  actualizarReserva_(r, { estado: ESTADOS.CITA_CONFIRMADA, revisada: 'sí', motivo: '' }, 'aprobada y agendada ' + r.fecha_cita + ' ' + r.hora_inicio);
   return respuesta_(r, avisarClienta_(r, 'confirmada'));
 }
 
@@ -1580,7 +1580,7 @@ function avisarAdmin_(r) {
   // URL de la publicación "Panel" (solo cuentas de amarecr.com). Ver INSTALAR.md.
   var url = CONFIG.PANEL_URL;
   var filas = [
-    ['Estado', r.estado === ESTADOS.REQUIERE_APROBACION ? 'REQUIERE APROBACIÓN (no está en el calendario todavía)' : 'Agendada en Google Calendar — revisar duración en "Por agendar"'],
+    ['Estado', r.estado === ESTADOS.REQUIERE_APROBACION ? 'REQUIERE APROBACIÓN (no está en el calendario todavía)' : 'Confirmada y agendada en Google Calendar con la duración máxima estimada'],
     ['Clienta', r.nombre + (r.tipo_cliente ? ' (clienta ' + r.tipo_cliente + ')' : '')], ['Celular', r.celular], ['Correo', r.correo],
     ['Servicio', r.servicio + ' (' + r.categoria + ') · ' + r.largo],
     ['Fecha y hora', fechaLarga_(r.fecha_solicitada) + ' · ' + hora12_(r.hora_solicitada || '09:00')],
