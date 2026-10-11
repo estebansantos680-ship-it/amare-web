@@ -953,3 +953,12 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
 .hero-servicios .hero-foto-texto{ max-width:430px; }
 .hero-servicios h1{ font-size:clamp(2.2rem, 3.6vw, 3.4rem); }
 @media (min-width:761px) and (max-width:1100px){ .hero-servicios .hero-foto-texto{ max-width:340px; } }
+
+/* Sobre nosotros: portada clara (fondo 12, sin desenfoque) y CTA con foto horizontal */
+.page-hero.hero-claro{ background:#f3ece2; color:var(--ink); }
+.page-hero.hero-claro .page-hero-bg img{ opacity:1; animation:none; }
+.page-hero.hero-claro .eyebrow{ color:var(--taupe-deep); }
+.page-hero.hero-claro p{ color:var(--ink); }
+.cta-banner .frame.frame-split.split-ancha{ grid-template-columns:1fr 1.1fr; }
+.cta-banner .frame.frame-split.split-ancha img{ object-position:50% 30%; }
+@media (max-width:760px){ .cta-banner .frame.frame-split.split-ancha{ grid-template-columns:1fr; } }
