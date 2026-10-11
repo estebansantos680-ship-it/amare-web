@@ -16,7 +16,7 @@ import os
 import sys
 import subprocess
 import imageio_ffmpeg
-from PIL import Image, ImageOps
+from PIL import Image, ImageFilter, ImageOps
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ORIGEN = os.path.join(RAIZ, 'imagenes', 'Imagenes cliente')
@@ -70,7 +70,7 @@ FOTOS = {
     'producto-p5': ('Productos pagina/5.5.jpeg', None, 600),
     'producto-p6': ('Productos pagina/6.webp', None, 600),
     'ubicacion': ('Imagen Ubicacion.png', None, 900),
-    'franja-balayage': ('Imagenes servicio/08 Balayage/1.jpeg', (600, 800), {'foco': (0.5, 0.0), 'zoom': 1.12, 'cara_x': 0.535, 'aire_arriba': 0.07}),  # "Especialistas en color" del inicio
+    'franja-balayage': ('Imagenes servicio/08 Balayage/1.jpeg', (600, 800), {'foco': (0.5, 0.5), 'encoger': 0.94}),  # "Especialistas en color" del inicio (con aire: el zoom animado no corta las puntas)
     'reservar': ('../Reservar tu cita.jpg', (1080, 1350)),  # portada de reservar.html (imagenes/)
     # Sobre nosotros: foto junto al texto, CTA de servicios y fondo de la portada
     'nosotros-balayage2': ('Imagenes servicio/08 Balayage/4.jpeg', (660, 880)),  # 3:4 completa (se ven las puntas)
@@ -131,6 +131,20 @@ def recorte(im, tam, foco=(0.5, 0.4), zoom=1.0, cara_x=None, aire_arriba=0.0):
     return out
 
 
+def con_aire(im, factor):
+    """Achica la foto al `factor` y la centra sobre la misma foto muy desenfocada (borde suave), para dejar aire."""
+    w, h = im.size
+    fondo = im.resize((w, h), Image.LANCZOS).filter(ImageFilter.GaussianBlur(28))
+    pw, ph = round(w * factor), round(h * factor)
+    peq = im.resize((pw, ph), Image.LANCZOS)
+    borde = round(min(pw, ph) * 0.06)
+    mascara = Image.new('L', (pw, ph), 0)
+    mascara.paste(255, (borde, borde, pw - borde, ph - borde))
+    mascara = mascara.filter(ImageFilter.GaussianBlur(borde / 2))
+    fondo.paste(peq, ((w - pw) // 2, (h - ph) // 2), mascara)
+    return fondo
+
+
 def fotos():
     os.makedirs(MEDIA, exist_ok=True)
     for nombre, spec in FOTOS.items():
@@ -138,7 +152,11 @@ def fotos():
         im = ImageOps.exif_transpose(Image.open(ruta))
         im = im.convert('RGBA' if im.mode in ('RGBA', 'LA', 'P') else 'RGB')
         if spec[1] and len(spec) > 2 and isinstance(spec[2], dict):
-            im = recorte(im, spec[1], **spec[2])
+            opciones = dict(spec[2])
+            encoger = opciones.pop('encoger', None)
+            im = recorte(im, spec[1], **opciones)
+            if encoger:
+                im = con_aire(im, encoger)
         elif spec[1]:
             im = ImageOps.fit(im, spec[1], Image.LANCZOS, centering=(0.5, 0.4))
         else:

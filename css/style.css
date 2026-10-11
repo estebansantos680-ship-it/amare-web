@@ -998,3 +998,11 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
 .cta-banner .frame.frame-split.split-ancha{ grid-template-columns:1fr 1.1fr; }
 .cta-banner .frame.frame-split.split-ancha img{ object-position:50% 30%; }
 @media (max-width:760px){ .cta-banner .frame.frame-split.split-ancha{ grid-template-columns:1fr; } }
+
+/* Tarjetas del inicio (Especialistas en color): zoom suave y centrado para no cortar cabeza ni puntas */
+@keyframes kenburns-suave{
+  0%  { transform:scale(1); }
+  50% { transform:scale(1.05); }
+  100%{ transform:scale(1); }
+}
+.strip-photo.motion img{ animation-name:kenburns-suave; transform-origin:50% 50%; }
