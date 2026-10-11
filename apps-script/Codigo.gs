@@ -74,9 +74,16 @@ var CONFIG = {
     // Solo las plantillas creadas y aprobadas en Meta (crearPlantillasWhatsApp). Las demás no se envían por WhatsApp.
     plantillas: {
       reserva_confirmada: ['fecha_dia', 'hora', 'servicio', 'inversion'],
+      recordatorio_3_dias: ['fecha_dia', 'hora', 'servicio'],
       recordatorio_1_dia: ['hora']
     },
-    // Encabezado de todas las plantillas: logo de Amarë (tools/generar_whatsapp_headers.py → assets/wa/logo.jpg)
+    // Encabezado de cada plantilla: tarjeta crema con el logo y el título (tools/generar_whatsapp_headers.py →
+    // assets/wa/claro-*.jpg). La imagen se envía con cada mensaje; "imagen" queda para las que no tengan la suya.
+    imagenes: {
+      reserva_confirmada: 'https://amarecr.com/assets/wa/claro-reserva_confirmada.jpg',
+      recordatorio_3_dias: 'https://amarecr.com/assets/wa/claro-recordatorio_3_dias.jpg',
+      recordatorio_1_dia: 'https://amarecr.com/assets/wa/claro-recordatorio_1_dia.jpg'
+    },
     imagen: 'https://amarecr.com/assets/wa/logo.jpg',
     appId: '2406232719906991'
   }
@@ -1246,7 +1253,8 @@ function avisarClienta_(r, tipo, canales) {
     if (sc && sc.directo) { if (enviarCorreoDirecto_(correo[0], r, correo[1])) enviados.push('correo'); }
     else if (sc) tareas.push({ canal: 'correo', nombre: correo[0], req: sc });
   }
-  if (canales.whatsapp && r.celular && wa) {
+  // Solo si la clienta aceptó WhatsApp en el formulario (o se marcó al crear la cita manual).
+  if (canales.whatsapp && r.celular && wa && String(r.whatsapp_ok) === 'sí') {
     var sw = solicitudWhatsApp_(wa, r);
     if (sw) tareas.push({ canal: 'whatsapp', nombre: wa, req: sw });
   }
@@ -1324,7 +1332,8 @@ function inversion_(r) {
 
 function componentesWhatsApp_(plantilla, orden, vals) {
   var c = [];
-  if (CONFIG.WHATSAPP_API.imagen) c.push({ type: 'header', parameters: [{ type: 'image', image: { link: CONFIG.WHATSAPP_API.imagen } }] });
+  var img = (CONFIG.WHATSAPP_API.imagenes || {})[plantilla] || CONFIG.WHATSAPP_API.imagen;
+  if (img) c.push({ type: 'header', parameters: [{ type: 'image', image: { link: img } }] });
   c.push({ type: 'body', parameters: orden.map(function (k) { return { type: 'text', text: String(vals[k] || '') }; }) });
   return c;
 }
@@ -1362,6 +1371,13 @@ var PLANTILLAS_WHATSAPP = {
       'Gracias por confiar en Amarë 🤍\n\n🤍 Recuerda que somos Amarë un espacio donde la belleza nace del amor por servir ✨',
     ejemplo: ['Martes 3 de septiembre', '9:00 a.m.', 'Nanoplastia', '₡40.000']
   },
+  recordatorio_3_dias: {
+    texto: 'Hola 👋🏻 esperamos que te encuentres muy bien ✨\n\nTe recordamos que en 3 días tienes tu cita en Amarë:\n\n' +
+      '📌 {{1}}\n⏰ {{2}}\n📍 Servicio: {{3}}\n\n' +
+      '📝 Te recomendamos asistir lo más cómod@ posible para que disfrutes de una experiencia relajante durante tu visita 💫\n\n' +
+      'Si necesitas cambiar tu cita, responde a este mensaje. ¡Te esperamos! 🤍',
+    ejemplo: ['Martes 3 de septiembre', '9:00 a.m.', 'Nanoplastia']
+  },
   recordatorio_1_dia: {
     texto: 'Buenas 💫 esperamos que te encuentres muy bien ✨\n\nQueremos confirmar tu cita para mañana:\n⏰ {{1}}\n\n' +
       'Será un gusto atenderte y brindarte una experiencia especial en Amarë 🤍\n\n' +
@@ -1371,26 +1387,20 @@ var PLANTILLAS_WHATSAPP = {
 };
 
 /**
- * Crea en Meta las plantillas de PLANTILLAS_WHATSAPP (categoría Utilidad, español, encabezado con el logo).
- * Se ejecuta una vez desde el editor; Meta las revisa (minutos a 24 h). Si ya existen, Meta responde con error y no pasa nada.
+ * Crea en Meta las plantillas de PLANTILLAS_WHATSAPP que todavía no existen (categoría Utilidad, español, encabezado
+ * con imagen). Se ejecuta desde el editor; Meta las revisa (minutos a 24 h). Las que ya existen no se tocan.
  */
 function crearPlantillasWhatsApp() {
   var p = PropertiesService.getScriptProperties();
   var token = p.getProperty('WHATSAPP_TOKEN'), waba = p.getProperty('WHATSAPP_WABA_ID') || '391116127424870';
   if (!token) throw new Error('Falta WHATSAPP_TOKEN.');
   var base = 'https://graph.facebook.com/' + CONFIG.WHATSAPP_API.version + '/';
-  // 1) Subir la imagen del encabezado (API de carga reanudable) para obtener su "handle" de ejemplo
-  var img = UrlFetchApp.fetch(CONFIG.WHATSAPP_API.imagen).getBlob();
-  var bytes = img.getBytes();
-  var sesion = JSON.parse(UrlFetchApp.fetch(base + CONFIG.WHATSAPP_API.appId + '/uploads?file_name=logo.jpg&file_length=' + bytes.length +
-    '&file_type=image/jpeg', { method: 'post', headers: { Authorization: 'Bearer ' + token } }).getContentText()).id;
-  var subida = UrlFetchApp.fetch(base + sesion, { method: 'post', contentType: 'image/jpeg', payload: bytes,
-    headers: { Authorization: 'OAuth ' + token, file_offset: '0' }, muteHttpExceptions: true });
-  console.log('Carga del encabezado: ' + subida.getResponseCode() + ' ' + subida.getContentText());
-  var handle = JSON.parse(subida.getContentText()).h;
-  // 2) Crear cada plantilla
+  var existentes = JSON.parse(UrlFetchApp.fetch(base + waba + '/message_templates?fields=name&limit=100',
+    { headers: { Authorization: 'Bearer ' + token } }).getContentText()).data.map(function (t) { return t.name; });
   Object.keys(PLANTILLAS_WHATSAPP).forEach(function (nombre) {
+    if (existentes.indexOf(nombre) >= 0) { console.log(nombre + ': ya existe, no se toca.'); return; }
     var t = PLANTILLAS_WHATSAPP[nombre];
+    var handle = subirEncabezadoWhatsApp_(base, token, (CONFIG.WHATSAPP_API.imagenes || {})[nombre] || CONFIG.WHATSAPP_API.imagen);
     var resp = UrlFetchApp.fetch(base + waba + '/message_templates', {
       method: 'post', contentType: 'application/json', muteHttpExceptions: true,
       headers: { Authorization: 'Bearer ' + token },
@@ -1404,6 +1414,22 @@ function crearPlantillasWhatsApp() {
     });
     console.log(nombre + ': ' + resp.getResponseCode() + ' ' + resp.getContentText());
   });
+}
+
+/** Sube una imagen de ejemplo del encabezado (API de carga reanudable) y devuelve su "handle". */
+function subirEncabezadoWhatsApp_(base, token, url) {
+  var bytes = UrlFetchApp.fetch(url).getBlob().getBytes();
+  var sesion = JSON.parse(UrlFetchApp.fetch(base + CONFIG.WHATSAPP_API.appId + '/uploads?file_name=encabezado.jpg&file_length=' +
+    bytes.length + '&file_type=image/jpeg', { method: 'post', headers: { Authorization: 'Bearer ' + token } }).getContentText()).id;
+  var subida = UrlFetchApp.fetch(base + sesion, { method: 'post', contentType: 'image/jpeg', payload: bytes,
+    headers: { Authorization: 'OAuth ' + token, file_offset: '0' }, muteHttpExceptions: true });
+  return JSON.parse(subida.getContentText()).h;
+}
+
+/** Enciende WhatsApp para todas las clientas (sale del modo prueba). Para volver al modo prueba: borrar WHATSAPP_ACTIVO. */
+function activarWhatsAppParaTodas() {
+  PropertiesService.getScriptProperties().setProperty('WHATSAPP_ACTIVO', 'si');
+  console.log('WhatsApp activo para todas las clientas.');
 }
 
 /** Estado de revisión de las plantillas en Meta (APPROVED / PENDING / REJECTED). */

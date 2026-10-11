@@ -79,6 +79,46 @@ if __name__ == '__main__':
         print(tarjeta(clave, eyebrow, titular))
 
 
+# Versión clara (crema), la que se usa en las 3 plantillas activas: misma composición, colores del sitio.
+CLARAS = {
+    'reserva_confirmada': ('RESERVA CONFIRMADA', ['Tu espacio', 'está reservado']),
+    'recordatorio_3_dias': ('RECORDATORIO', ['Tu cita es', 'en 3 días']),
+    'recordatorio_1_dia': ('RECORDATORIO', ['¡Mañana', 'es tu cita!']),
+}
+TINTA, FONDO_CREMA, MARRON = (11, 11, 11), (245, 241, 234), (90, 81, 72)
+
+
+def tarjeta_clara(clave, eyebrow, titular):
+    im = Image.new('RGB', (W, H), FONDO_CREMA)
+    d = ImageDraw.Draw(im)
+    d.rectangle((26, 26, W - 26, H - 26), outline=TAUPE, width=2)
+    d.rectangle((38, 38, W - 38, H - 38), outline=(222, 212, 196), width=1)
+    cx = 330
+    d.ellipse((cx - 92, 110, cx + 92, 294), outline=TAUPE_OSC, width=2)
+    centrado(d, cx, 138, 'A', fuente('georgia.ttf', 116), TINTA)
+    for dx in (-17, 17):
+        d.ellipse((cx + dx - 6, 140, cx + dx + 6, 152), fill=TAUPE_OSC)
+    centrado(d, cx, 330, 'AMARË', fuente('georgia.ttf', 78), TINTA)
+    espaciado(d, (cx, 432), 'BEAUTY CENTER', fuente('segoeui.ttf', 20), TAUPE_OSC, 8, centro=True)
+    d.line((600, 150, 600, H - 150), fill=TAUPE, width=1)
+    x0 = 660
+    espaciado(d, (x0, 205), eyebrow, fuente('segoeuib.ttf', 20), TAUPE_OSC, 6)
+    d.line((x0, 246, x0 + 64, 246), fill=TAUPE_OSC, width=2)
+    y = 272
+    for linea in titular:
+        d.text((x0, y), linea, font=fuente('georgiai.ttf', 54), fill=TINTA)
+        y += 68
+    espaciado(d, (x0, H - 112), 'San José, Santa Ana  ·  amarecr.com', fuente('segoeui.ttf', 19), MARRON, 1)
+    destino = SALIDA / f'claro-{clave}.jpg'
+    im.save(destino, 'JPEG', quality=92, optimize=True, progressive=True)
+    return destino
+
+
+if __name__ == '__main__':
+    for clave, (eyebrow, titular) in CLARAS.items():
+        print(tarjeta_clara(clave, eyebrow, titular))
+
+
 def cabecera_correo():
     """Banda plana de marca para la cabecera de los correos (assets/email/cabecera.jpg), sin fotos de personas."""
     w, h = 1200, 300
