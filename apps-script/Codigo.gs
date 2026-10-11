@@ -1173,9 +1173,12 @@ function enviarWhatsApp_(plantilla, r) {
   var orden = CONFIG.WHATSAPP_API.plantillas[plantilla];
   if (!tel || !orden) return false;
   var p = PropertiesService.getScriptProperties();
-  // Modo prueba: si WHATSAPP_SOLO_NUMERO tiene un número, solo se le envía a ese (las clientas reales no reciben nada).
-  var soloA = String(p.getProperty('WHATSAPP_SOLO_NUMERO') || '').replace(/\D/g, '');
-  if (soloA && tel !== soloA) { console.log('WhatsApp en modo prueba: no se envía a ' + tel); return false; }
+  // Modo prueba POR DEFECTO: mientras WHATSAPP_ACTIVO no sea "si", solo se envía al número de pruebas
+  // (WHATSAPP_SOLO_NUMERO, o el de Esteban). Las clientas reales no reciben nada hasta encenderlo.
+  if (String(p.getProperty('WHATSAPP_ACTIVO') || '').toLowerCase() !== 'si') {
+    var soloA = String(p.getProperty('WHATSAPP_SOLO_NUMERO') || '50672808979').replace(/\D/g, '');
+    if (tel !== soloA) { console.log('WhatsApp en modo prueba: no se envía a ' + tel); return false; }
+  }
   var vals = {
     nombre: String(r.nombre || '').split(' ')[0] || 'clienta', servicio: r.servicio,
     fecha: fechaLarga_(r.fecha_cita || r.fecha_solicitada),
@@ -1203,12 +1206,36 @@ function componentesWhatsApp_(plantilla, orden, vals) {
 }
 
 /**
+ * Configuración inicial desde el editor (una vez pegado WHATSAPP_TOKEN): busca el número del salón en la cuenta de
+ * WhatsApp Business (WHATSAPP_WABA_ID, por defecto la de Amarë) y guarda su ID en WHATSAPP_PHONE_ID.
+ * No envía ningún mensaje. El resultado queda en el registro de ejecución.
+ */
+function configurarWhatsApp() {
+  var p = PropertiesService.getScriptProperties();
+  var token = p.getProperty('WHATSAPP_TOKEN');
+  if (!token) throw new Error('Falta la propiedad WHATSAPP_TOKEN.');
+  var waba = p.getProperty('WHATSAPP_WABA_ID') || '391116127424870';
+  var resp = UrlFetchApp.fetch('https://graph.facebook.com/' + CONFIG.WHATSAPP_API.version + '/' + waba +
+    '/phone_numbers?fields=id,display_phone_number,verified_name,platform_type,status,quality_rating', {
+    headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true
+  });
+  console.log('Respuesta ' + resp.getResponseCode() + ': ' + resp.getContentText());
+  if (resp.getResponseCode() >= 300) throw new Error('Meta rechazó la consulta (revisa permisos del token sobre la cuenta ' + waba + ').');
+  var numeros = JSON.parse(resp.getContentText()).data || [];
+  var salon = numeros.filter(function (n) { return String(n.display_phone_number).replace(/\D/g, '').indexOf('88073849') >= 0; })[0];
+  if (!salon) throw new Error('No encontré el +506 8807-3849 en la cuenta ' + waba + '.');
+  p.setProperty('WHATSAPP_PHONE_ID', salon.id);
+  p.setProperty('WHATSAPP_WABA_ID', waba);
+  console.log('Listo: WHATSAPP_PHONE_ID = ' + salon.id + ' (' + salon.verified_name + ', ' + salon.platform_type + ', ' + salon.status + ')');
+}
+
+/**
  * Prueba desde el editor: envía las 5 plantillas SOLO al número de prueba (WHATSAPP_SOLO_NUMERO, o el que se pase).
  * No toca la hoja ni el calendario. Ver el resultado en el registro de ejecución.
  */
 function probarWhatsApp(numero) {
   var p = PropertiesService.getScriptProperties();
-  var tel = String(numero || p.getProperty('WHATSAPP_SOLO_NUMERO') || '').replace(/\D/g, '');
+  var tel = String(numero || p.getProperty('WHATSAPP_SOLO_NUMERO') || '50672808979').replace(/\D/g, '');
   if (!tel) throw new Error('Pon el número de prueba en la propiedad WHATSAPP_SOLO_NUMERO (ej. 50672808979).');
   var hoy = Utilities.formatDate(new Date(Date.now() + 3 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
   var r = { nombre: 'Prueba Amarë', celular: tel, servicio: 'Balayage', fecha_solicitada: hoy, fecha_cita: hoy, hora_inicio: '09:00' };
