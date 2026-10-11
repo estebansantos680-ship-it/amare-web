@@ -188,7 +188,7 @@ nav.wrap{
   50% { transform:scale(1.02) translate(0,0); }
   100%{ transform:scale(1.1) translate(1%, 1%); }
 }
-.motion img{ animation:kenburns 18s ease-in-out infinite; will-change:transform; }
+.motion img{ animation:kenburns 18s ease-in-out infinite; will-change:transform; transform-origin:50% 12%; }
 .motion.alt img{ animation-name:kenburns-alt; animation-duration:22s; }
 
 /* Carrusel con fundido cruzado (el hero se "mueve" como un GIF) */

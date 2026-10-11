@@ -68,7 +68,7 @@ FOTOS = {
     'producto-p5': ('Productos pagina/5.5.jpeg', None, 600),
     'producto-p6': ('Productos pagina/6.webp', None, 600),
     'ubicacion': ('Imagen Ubicacion.png', None, 900),
-    'franja-balayage': ('Imagenes servicio/08 Balayage/1.jpeg', (600, 800), {'foco': (0.5, 0.0), 'zoom': 1.12, 'cara_x': 0.535}),  # "Especialistas en color" del inicio
+    'franja-balayage': ('Imagenes servicio/08 Balayage/1.jpeg', (600, 800), {'foco': (0.5, 0.0), 'zoom': 1.12, 'cara_x': 0.535, 'aire_arriba': 0.07}),  # "Especialistas en color" del inicio
     'reservar': ('../Reservar tu cita.jpg', (1080, 1350)),  # portada de reservar.html (imagenes/)
 }
 
