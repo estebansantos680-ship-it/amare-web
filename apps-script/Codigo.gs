@@ -71,15 +71,14 @@ var CONFIG = {
     version: 'v21.0',
     idioma: 'es',
     // plantilla → orden de las variables {{1}}, {{2}}… (deben coincidir con las plantillas aprobadas en Meta)
+    // Solo las plantillas creadas y aprobadas en Meta (crearPlantillasWhatsApp). Las demás no se envían por WhatsApp.
     plantillas: {
-      reserva_confirmada: ['nombre', 'servicio', 'fecha', 'hora', 'direccion'],
-      reserva_en_revision: ['nombre', 'servicio', 'fecha', 'hora'],
-      cita_actualizada: ['nombre', 'servicio', 'fecha', 'hora'],
-      recordatorio_3_dias: ['nombre', 'servicio', 'fecha', 'hora', 'direccion'],
-      recordatorio_1_dia: ['nombre', 'servicio', 'fecha', 'hora', 'direccion']
+      reserva_confirmada: ['fecha_dia', 'hora', 'servicio', 'inversion'],
+      recordatorio_1_dia: ['hora']
     },
-    // Encabezado con imagen (tarjeta de marca) de cada plantilla: tools/generar_whatsapp_headers.py → assets/wa/
-    imagenes: 'https://amarecr.com/assets/wa/'
+    // Encabezado de todas las plantillas: logo de Amarë (tools/generar_whatsapp_headers.py → assets/wa/logo.jpg)
+    imagen: 'https://amarecr.com/assets/wa/logo.jpg',
+    appId: '2406232719906991'
   }
 };
 
@@ -1183,7 +1182,9 @@ function enviarWhatsApp_(plantilla, r) {
     nombre: String(r.nombre || '').split(' ')[0] || 'clienta', servicio: r.servicio,
     fecha: fechaLarga_(r.fecha_cita || r.fecha_solicitada),
     hora: hora12_(r.hora_inicio || r.hora_solicitada || (r.franja === 'Tarde' ? '13:00' : '09:00')),
-    direccion: CONFIG.DIRECCION
+    direccion: CONFIG.DIRECCION,
+    fecha_dia: fechaLarga_(r.fecha_cita || r.fecha_solicitada).replace(/ de \d{4}$/, '').replace(',', ''),
+    inversion: inversion_(r)
   };
   var resp = UrlFetchApp.fetch('https://graph.facebook.com/' + CONFIG.WHATSAPP_API.version + '/' + p.getProperty('WHATSAPP_PHONE_ID') + '/messages', {
     method: 'post', contentType: 'application/json', muteHttpExceptions: true,
@@ -1198,9 +1199,16 @@ function enviarWhatsApp_(plantilla, r) {
   return true;
 }
 
+/** Precio para el mensaje: "₡40.000" o "₡40.000 – ₡50.000". */
+function inversion_(r) {
+  var a = Number(r.precio_min) || 0, b = Number(r.precio_max) || 0;
+  if (!a && !b) return 'Según valoración';
+  return !b || a === b ? colones_(a || b) : colones_(a) + ' – ' + colones_(b);
+}
+
 function componentesWhatsApp_(plantilla, orden, vals) {
   var c = [];
-  if (CONFIG.WHATSAPP_API.imagenes) c.push({ type: 'header', parameters: [{ type: 'image', image: { link: CONFIG.WHATSAPP_API.imagenes + plantilla + '.jpg' } }] });
+  if (CONFIG.WHATSAPP_API.imagen) c.push({ type: 'header', parameters: [{ type: 'image', image: { link: CONFIG.WHATSAPP_API.imagen } }] });
   c.push({ type: 'body', parameters: orden.map(function (k) { return { type: 'text', text: String(vals[k] || '') }; }) });
   return c;
 }
@@ -1229,6 +1237,69 @@ function configurarWhatsApp() {
   console.log('Listo: WHATSAPP_PHONE_ID = ' + salon.id + ' (' + salon.verified_name + ', ' + salon.platform_type + ', ' + salon.status + ')');
 }
 
+// Textos aprobados por el cliente (oct-2026). {{n}} = variables en el orden de CONFIG.WHATSAPP_API.plantillas.
+var PLANTILLAS_WHATSAPP = {
+  reserva_confirmada: {
+    texto: 'Hola 👋🏻 esperamos que te encuentres muy bien ✨\n\nEn Amarë hemos reservado un espacio especial para ti:\n\n' +
+      '📌 {{1}}\n⏰ {{2}}\n📍 Servicio: {{3}}\n💲 Inversión: {{4}}\n\n' +
+      '📝 Importante: te recomendamos asistir lo más cómod@ posible para que disfrutes de una experiencia relajante y especial durante tu visita 💫\n\n' +
+      'Gracias por confiar en Amarë 🤍\n\n🤍 Recuerda que somos Amarë un espacio donde la belleza nace del amor por servir ✨',
+    ejemplo: ['Martes 3 de septiembre', '9:00 a.m.', 'Nanoplastia', '₡40.000']
+  },
+  recordatorio_1_dia: {
+    texto: 'Buenas 💫 esperamos que te encuentres muy bien ✨\n\nQueremos confirmar tu cita para mañana:\n⏰ {{1}}\n\n' +
+      'Será un gusto atenderte y brindarte una experiencia especial en Amarë 🤍\n\n' +
+      '🤍 Recuerda que somos Amarë un espacio donde la belleza nace del amor por servir ✨',
+    ejemplo: ['9:00 a.m.']
+  }
+};
+
+/**
+ * Crea en Meta las plantillas de PLANTILLAS_WHATSAPP (categoría Utilidad, español, encabezado con el logo).
+ * Se ejecuta una vez desde el editor; Meta las revisa (minutos a 24 h). Si ya existen, Meta responde con error y no pasa nada.
+ */
+function crearPlantillasWhatsApp() {
+  var p = PropertiesService.getScriptProperties();
+  var token = p.getProperty('WHATSAPP_TOKEN'), waba = p.getProperty('WHATSAPP_WABA_ID') || '391116127424870';
+  if (!token) throw new Error('Falta WHATSAPP_TOKEN.');
+  var base = 'https://graph.facebook.com/' + CONFIG.WHATSAPP_API.version + '/';
+  // 1) Subir la imagen del encabezado (API de carga reanudable) para obtener su "handle" de ejemplo
+  var img = UrlFetchApp.fetch(CONFIG.WHATSAPP_API.imagen).getBlob();
+  var bytes = img.getBytes();
+  var sesion = JSON.parse(UrlFetchApp.fetch(base + CONFIG.WHATSAPP_API.appId + '/uploads?file_name=logo.jpg&file_length=' + bytes.length +
+    '&file_type=image/jpeg', { method: 'post', headers: { Authorization: 'Bearer ' + token } }).getContentText()).id;
+  var subida = UrlFetchApp.fetch(base + sesion, { method: 'post', contentType: 'image/jpeg', payload: bytes,
+    headers: { Authorization: 'OAuth ' + token, file_offset: '0' }, muteHttpExceptions: true });
+  console.log('Carga del encabezado: ' + subida.getResponseCode() + ' ' + subida.getContentText());
+  var handle = JSON.parse(subida.getContentText()).h;
+  // 2) Crear cada plantilla
+  Object.keys(PLANTILLAS_WHATSAPP).forEach(function (nombre) {
+    var t = PLANTILLAS_WHATSAPP[nombre];
+    var resp = UrlFetchApp.fetch(base + waba + '/message_templates', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      headers: { Authorization: 'Bearer ' + token },
+      payload: JSON.stringify({
+        name: nombre, language: CONFIG.WHATSAPP_API.idioma, category: 'UTILITY',
+        components: [
+          { type: 'HEADER', format: 'IMAGE', example: { header_handle: [handle] } },
+          { type: 'BODY', text: t.texto, example: { body_text: [t.ejemplo] } }
+        ]
+      })
+    });
+    console.log(nombre + ': ' + resp.getResponseCode() + ' ' + resp.getContentText());
+  });
+}
+
+/** Estado de revisión de las plantillas en Meta (APPROVED / PENDING / REJECTED). */
+function estadoPlantillasWhatsApp() {
+  var p = PropertiesService.getScriptProperties();
+  var waba = p.getProperty('WHATSAPP_WABA_ID') || '391116127424870';
+  var resp = UrlFetchApp.fetch('https://graph.facebook.com/' + CONFIG.WHATSAPP_API.version + '/' + waba +
+    '/message_templates?fields=name,status,category,language,rejected_reason&limit=50',
+    { headers: { Authorization: 'Bearer ' + p.getProperty('WHATSAPP_TOKEN') }, muteHttpExceptions: true });
+  console.log(resp.getContentText());
+}
+
 /**
  * Prueba desde el editor: envía las 5 plantillas SOLO al número de prueba (WHATSAPP_SOLO_NUMERO, o el que se pase).
  * No toca la hoja ni el calendario. Ver el resultado en el registro de ejecución.
@@ -1238,7 +1309,8 @@ function probarWhatsApp(numero) {
   var tel = String(numero || p.getProperty('WHATSAPP_SOLO_NUMERO') || '50672808979').replace(/\D/g, '');
   if (!tel) throw new Error('Pon el número de prueba en la propiedad WHATSAPP_SOLO_NUMERO (ej. 50672808979).');
   var hoy = Utilities.formatDate(new Date(Date.now() + 3 * 864e5), CONFIG.ZONA, 'yyyy-MM-dd');
-  var r = { nombre: 'Prueba Amarë', celular: tel, servicio: 'Balayage', fecha_solicitada: hoy, fecha_cita: hoy, hora_inicio: '09:00' };
+  var r = { nombre: 'Prueba Amarë', celular: tel, servicio: 'Balayage', fecha_solicitada: hoy, fecha_cita: hoy, hora_inicio: '09:00',
+            precio_min: 40000, precio_max: 40000 };
   Object.keys(CONFIG.WHATSAPP_API.plantillas).forEach(function (pl) {
     console.log(pl + ': ' + (enviarWhatsApp_(pl, r) ? 'enviado' : 'NO salió (ver errores arriba)'));
   });

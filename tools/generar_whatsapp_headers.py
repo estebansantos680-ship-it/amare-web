@@ -99,3 +99,27 @@ def cabecera_correo():
 
 if __name__ == '__main__':
     print(cabecera_correo())
+
+
+def logo_whatsapp():
+    """Encabezado de las plantillas de WhatsApp: logo de Amarë limpio sobre crema (assets/wa/logo.jpg, 1200x628)."""
+    w, h = 1200, 628
+    im = Image.new('RGB', (w, h), (245, 243, 239))
+    d = ImageDraw.Draw(im)
+    cx = w // 2
+    d.rectangle((24, 24, w - 24, h - 24), outline=TAUPE, width=2)
+    d.ellipse((cx - 74, 92, cx + 74, 240), outline=TAUPE, width=2)
+    centrado(d, cx, 112, 'A', fuente('georgia.ttf', 96), NEGRO)
+    for dx in (-14, 14):
+        d.ellipse((cx + dx - 5, 114, cx + dx + 5, 124), fill=TAUPE)
+    centrado(d, cx, 282, 'AMARË', fuente('georgia.ttf', 92), NEGRO)
+    espaciado(d, (cx, 400), 'BEAUTY CENTER', fuente('segoeui.ttf', 24), TAUPE_OSC, 10, centro=True)
+    d.line((cx - 50, 460, cx + 50, 460), fill=TAUPE, width=2)
+    espaciado(d, (cx, 488), 'San José, Santa Ana  ·  amarecr.com', fuente('segoeui.ttf', 20), (95, 88, 80), 2, centro=True)
+    destino = SALIDA / 'logo.jpg'
+    im.save(destino, 'JPEG', quality=92, optimize=True, progressive=True)
+    return destino
+
+
+if __name__ == '__main__':
+    print(logo_whatsapp())
