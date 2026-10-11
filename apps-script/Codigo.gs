@@ -1123,7 +1123,20 @@ function enviarRecordatorios() {
       return;
     }
     if (r.estado !== ESTADOS.CITA_CONFIRMADA || !r.fecha_cita || !r.hora_inicio) return;
-    var faltan = (fechaHora_(r.fecha_cita, r.hora_inicio).getTime() - ahora) / 36e5;
+    var inicio = fechaHora_(r.fecha_cita, r.hora_inicio).getTime();
+    var faltan = (inicio - ahora) / 36e5;
+    // Horas de anticipación con que se hizo la reserva: si reservó con menos de 3 días (o de 1 día), ese
+    // recordatorio se omite — acaba de recibir la confirmación con la fecha.
+    var anticipacion = horasAnticipacion_(r, inicio);
+    if (!r.recordatorio_3d && faltan > 24 && faltan <= 72 && anticipacion !== null && anticipacion <= 72) {
+      actualizarReserva_(r, { recordatorio_3d: 'omitido' }, 'recordatorio 3 días omitido (reservó con menos de 3 días)');
+      return;
+    }
+    if (!r.recordatorio_enviado && faltan > 0 && faltan <= 24 && anticipacion !== null && anticipacion <= 24) {
+      actualizarReserva_(r, { recordatorio_enviado: 'omitido', recordatorio_3d: r.recordatorio_3d || 'omitido' },
+        'recordatorio 1 día omitido (reservó con menos de 1 día)');
+      return;
+    }
     if (!r.recordatorio_3d && faltan > 24 && faltan <= 72) {
       var envio3 = avisarClienta_(r, 'recordatorio3');
       if (envio3) actualizarReserva_(r, { recordatorio_3d: new Date() }, 'recordatorio 3 días enviado (' + envio3 + ')');
@@ -1132,6 +1145,13 @@ function enviarRecordatorios() {
       if (envio1) actualizarReserva_(r, { recordatorio_enviado: new Date(), recordatorio_3d: r.recordatorio_3d || 'omitido' }, 'recordatorio 1 día enviado (' + envio1 + ')');
     }
   });
+}
+
+/** Horas entre la creación de la reserva ("yyyy-MM-dd HH:mm") y el inicio de la cita, o null si no se sabe. */
+function horasAnticipacion_(r, inicio) {
+  var c = r.creado instanceof Date ? r.creado : null;
+  if (!c && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(String(r.creado))) c = fechaHora_(String(r.creado).slice(0, 10), String(r.creado).slice(11, 16));
+  return c ? (inicio - c.getTime()) / 36e5 : null;
 }
 
 // ------------------------------------------------------------------ Avisos a la clienta (correo + WhatsApp)
@@ -1148,8 +1168,25 @@ function avisarClienta_(r, tipo, canales) {
   }[tipo];
   var wa = { confirmada: 'reserva_confirmada', actualizada: 'cita_actualizada', revision: 'reserva_en_revision',
              recordatorio3: 'recordatorio_3_dias', recordatorio1: 'recordatorio_1_dia' }[tipo];
-  if (canales.correo && r.correo && correo && enviarCorreo_(correo[0], r, correo[1])) enviados.push('correo');
-  if (canales.whatsapp && r.celular && wa && enviarWhatsApp_(wa, r)) enviados.push('whatsapp');
+  // Se preparan las dos solicitudes y salen en paralelo (la reserva en la web espera menos).
+  var tareas = [];
+  if (canales.correo && r.correo && correo) {
+    var sc = solicitudCorreo_(correo[0], r, correo[1]);
+    if (sc && sc.directo) { if (enviarCorreoDirecto_(correo[0], r, correo[1])) enviados.push('correo'); }
+    else if (sc) tareas.push({ canal: 'correo', nombre: correo[0], req: sc });
+  }
+  if (canales.whatsapp && r.celular && wa) {
+    var sw = solicitudWhatsApp_(wa, r);
+    if (sw) tareas.push({ canal: 'whatsapp', nombre: wa, req: sw });
+  }
+  if (tareas.length) {
+    var resps = UrlFetchApp.fetchAll(tareas.map(function (t) { return t.req; }));
+    resps.forEach(function (resp, i) {
+      var ok = resp.getResponseCode() < 300;
+      if (ok) enviados.push(tareas[i].canal);
+      else console.error(tareas[i].canal + ' ' + tareas[i].nombre + ': ' + resp.getResponseCode() + ' ' + resp.getContentText());
+    });
+  }
   return enviados.join('+');
 }
 
@@ -1167,16 +1204,25 @@ function telefonoWhatsApp_(cel) {
 
 /** Envía una plantilla aprobada de WhatsApp (Cloud API de Meta). Sin token configurado no hace nada. */
 function enviarWhatsApp_(plantilla, r) {
-  if (!whatsappListo_()) return false;
+  var req = solicitudWhatsApp_(plantilla, r);
+  if (!req) return false;
+  var resp = UrlFetchApp.fetch(req.url, req);
+  if (resp.getResponseCode() >= 300) { console.error('WhatsApp ' + plantilla + ': ' + resp.getResponseCode() + ' ' + resp.getContentText()); return false; }
+  return true;
+}
+
+/** Solicitud lista para UrlFetchApp (o null si no corresponde enviar: sin configurar, sin plantilla o modo prueba). */
+function solicitudWhatsApp_(plantilla, r) {
+  if (!whatsappListo_()) return null;
   var tel = telefonoWhatsApp_(r.celular);
   var orden = CONFIG.WHATSAPP_API.plantillas[plantilla];
-  if (!tel || !orden) return false;
+  if (!tel || !orden) return null;
   var p = PropertiesService.getScriptProperties();
   // Modo prueba POR DEFECTO: mientras WHATSAPP_ACTIVO no sea "si", solo se envía al número de pruebas
   // (WHATSAPP_SOLO_NUMERO, o el de Esteban). Las clientas reales no reciben nada hasta encenderlo.
   if (String(p.getProperty('WHATSAPP_ACTIVO') || '').toLowerCase() !== 'si') {
     var soloA = String(p.getProperty('WHATSAPP_SOLO_NUMERO') || '50672808979').replace(/\D/g, '');
-    if (tel !== soloA) { console.log('WhatsApp en modo prueba: no se envía a ' + tel); return false; }
+    if (tel !== soloA) { console.log('WhatsApp en modo prueba: no se envía a ' + tel); return null; }
   }
   var vals = {
     nombre: String(r.nombre || '').split(' ')[0] || 'clienta', servicio: r.servicio,
@@ -1186,7 +1232,8 @@ function enviarWhatsApp_(plantilla, r) {
     fecha_dia: fechaLarga_(r.fecha_cita || r.fecha_solicitada).replace(/ de \d{4}$/, '').replace(',', ''),
     inversion: inversion_(r)
   };
-  var resp = UrlFetchApp.fetch('https://graph.facebook.com/' + CONFIG.WHATSAPP_API.version + '/' + p.getProperty('WHATSAPP_PHONE_ID') + '/messages', {
+  return {
+    url: 'https://graph.facebook.com/' + CONFIG.WHATSAPP_API.version + '/' + p.getProperty('WHATSAPP_PHONE_ID') + '/messages',
     method: 'post', contentType: 'application/json', muteHttpExceptions: true,
     headers: { Authorization: 'Bearer ' + p.getProperty('WHATSAPP_TOKEN') },
     payload: JSON.stringify({
@@ -1194,9 +1241,7 @@ function enviarWhatsApp_(plantilla, r) {
       template: { name: plantilla, language: { code: CONFIG.WHATSAPP_API.idioma },
         components: componentesWhatsApp_(plantilla, orden, vals) }
     })
-  });
-  if (resp.getResponseCode() >= 300) { console.error('WhatsApp ' + plantilla + ': ' + resp.getResponseCode() + ' ' + resp.getContentText()); return false; }
-  return true;
+  };
 }
 
 /** Precio para el mensaje: "₡40.000" o "₡40.000 – ₡50.000". */
@@ -1365,9 +1410,22 @@ function probarCorreo() {
 }
 
 function enviarCorreo_(clave, r, extra) {
+  var req = solicitudCorreo_(clave, r, extra);
+  if (!req) return false;
+  if (req.directo) return enviarCorreoDirecto_(clave, r, extra);
+  var resp = UrlFetchApp.fetch(req.url, req);
+  if (resp.getResponseCode() !== 200) {
+    console.error('EmailJS ' + clave + ': ' + resp.getResponseCode() + ' ' + resp.getContentText());
+    return false;
+  }
+  return true;
+}
+
+/** Solicitud a EmailJS lista para UrlFetchApp; { directo: true } si ese correo sale por Gmail; null si no hay plantilla. */
+function solicitudCorreo_(clave, r, extra) {
   var template = PropertiesService.getScriptProperties().getProperty('TEMPLATE_' + clave) || CONFIG.EMAILJS.templates[clave];
-  if (!template && CORREOS_DIRECTOS[clave]) return enviarCorreoDirecto_(clave, r, extra);
-  if (!template) { console.warn('Template sin configurar: ' + clave); return false; }
+  if (!template && CORREOS_DIRECTOS[clave]) return { directo: true };
+  if (!template) { console.warn('Template sin configurar: ' + clave); return null; }
   var params = parametrosCorreo_(r);
   Object.keys(extra || {}).forEach(function (k) { params[k] = extra[k]; });
   var cuerpo = {
@@ -1380,17 +1438,8 @@ function enviarCorreo_(clave, r, extra) {
   // Se guarda en Propiedades del script como EMAILJS_PRIVATE_KEY (nunca en el código).
   var privada = PropertiesService.getScriptProperties().getProperty('EMAILJS_PRIVATE_KEY');
   if (privada) cuerpo.accessToken = privada;
-  var resp = UrlFetchApp.fetch('https://api.emailjs.com/api/v1.0/email/send', {
-    method: 'post',
-    contentType: 'application/json',
-    muteHttpExceptions: true,
-    payload: JSON.stringify(cuerpo)
-  });
-  if (resp.getResponseCode() !== 200) {
-    console.error('EmailJS ' + clave + ': ' + resp.getResponseCode() + ' ' + resp.getContentText());
-    return false;
-  }
-  return true;
+  return { url: 'https://api.emailjs.com/api/v1.0/email/send', method: 'post', contentType: 'application/json',
+           muteHttpExceptions: true, payload: JSON.stringify(cuerpo) };
 }
 
 /**
