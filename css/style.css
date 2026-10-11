@@ -904,7 +904,11 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
 }
 
 /* Productos: la foto completa del producto sobre fondo claro */
-.gallery-item .img-producto{ object-fit:contain; background:#fff; }
+/* Productos: tarjetas cuadradas iguales (las fotos de producto son cuadradas); 5 productos, última fila centrada */
+.productos-grid{ display:flex; flex-wrap:wrap; justify-content:center; }
+.productos-grid .gallery-item{ flex:0 1 calc((100% - 2 * clamp(10px, 1.6vw, 20px)) / 3); aspect-ratio:1/1; }
+.gallery-item .img-producto{ object-fit:cover; background:#fff; }
+@media (max-width:760px){ .productos-grid .gallery-item{ flex-basis:calc((100% - clamp(10px, 1.6vw, 20px)) / 2); } }
 
 /* Misión y visión: portada plana con la marca de agua AMARË */
 .page-hero-plano{ background:linear-gradient(135deg, var(--black) 0%, var(--mocha) 100%); }
@@ -915,3 +919,6 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
 
 /* Ubicación: imagen nueva en proporción 2:3 */
 .location-photo.tall{ aspect-ratio:2/3; }
+
+/* Reserva: "¿Tienes dudas?" dentro de la misma caja, al pie (el cliente pidió un solo bloque) */
+.booking-help.booking-help-unida{ max-width:none; margin:clamp(24px, 4vw, 34px) 0 0; padding:clamp(20px, 3vw, 26px) 0 0; border:0; border-top:1px solid var(--line); border-radius:0; background:transparent; }
