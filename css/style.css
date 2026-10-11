@@ -962,3 +962,8 @@ footer{ background:var(--black); color:var(--cream); padding-top:clamp(60px, 8vw
 .cta-banner .frame.frame-split.split-ancha{ grid-template-columns:1fr 1.1fr; }
 .cta-banner .frame.frame-split.split-ancha img{ object-position:50% 30%; }
 @media (max-width:760px){ .cta-banner .frame.frame-split.split-ancha{ grid-template-columns:1fr; } }
+
+/* Foto del equipo con fondo blanco: el texto va en una franja debajo (sin degradado encima de la foto) */
+.team-photo{ aspect-ratio:auto; background:#ffffff; }
+.team-photo img{ height:auto; }
+.team-photo figcaption{ position:static; background:var(--black); }
