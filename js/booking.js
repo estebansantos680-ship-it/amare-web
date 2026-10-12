@@ -1001,7 +1001,7 @@
 
   // Pedido con comprobante: se envía como formulario normal en la misma página
   // (en un iframe oculto FormSubmit lo descarta). FormSubmit redirige a _next,
-  // que vuelve a reservar.html?reserva=enviada y ahí se muestra el "¡Gracias!".
+  // que vuelve a /reservar?reserva=enviada y ahí se muestra el "¡Gracias!".
   // Correo 2 → negocio: solo el comprobante y los datos para validarlo.
   // Importante: NO incluir datos_json aquí; con adjunto, FormSubmit rechaza el
   // envío si lleva ese JSON (probado 28-sep-2026). Los datos completos van en
@@ -1031,7 +1031,7 @@
     Object.keys(payload).forEach(function (k) {
       limpio[aAscii(k)] = k === 'datos_json' ? jsonAscii(payload[k]) : aAscii(payload[k]);
     });
-    var campos = assign({}, limpio, { _next: 'https://amarecr.com/reservar.html?reserva=enviada' });
+    var campos = assign({}, limpio, { _next: 'https://amarecr.com/reservar?reserva=enviada' });
 
     var form = document.createElement('form');
     form.method = 'POST';
@@ -1081,7 +1081,7 @@
     if (new URLSearchParams(window.location.search).get('reserva') !== 'enviada') return false;
     var datos = null;
     try { datos = JSON.parse(sessionStorage.getItem(CLAVE_RESERVA)); sessionStorage.removeItem(CLAVE_RESERVA); } catch (e) {}
-    if (window.history && history.replaceState) history.replaceState(null, '', 'reservar.html');
+    if (window.history && history.replaceState) history.replaceState(null, '', 'reservar');
     if (!datos) return false;
     mostrarGracias(datos);
     setTimeout(function () { els.box.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);

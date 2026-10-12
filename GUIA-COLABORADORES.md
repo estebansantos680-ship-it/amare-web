@@ -23,7 +23,7 @@ los cambios más comunes (textos, fotos, videos, servicios, estilos) sin romper 
    ```
 4. Correr el sitio en local:
    ```
-   python -m http.server 5500
+   python tools/servidor_local.py
    ```
    y abrir **http://localhost:5500**. No hay que compilar nada: es HTML, CSS y JavaScript puro.
 
@@ -131,6 +131,8 @@ En `css/style.css`. Los colores de marca están como variables al inicio (`--bla
 que diga para qué son.
 
 ### Agregar una página nueva
+Los enlaces internos van **sin `.html`** (`href="sobre-nosotros"`, y al inicio `href="/"`): así se ve la
+dirección limpia (amarecr.com/sobre-nosotros). El archivo sí se llama `sobre-nosotros.html`.
 Copia una página parecida, cambia `<title>`, la descripción y el contenido. Agrégala en `ACTIVE` dentro de
 `tools/sync_layout.py`, en el menú (`_partials/header.html`) y en `sitemap.xml`. Luego `sync_layout.py`.
 

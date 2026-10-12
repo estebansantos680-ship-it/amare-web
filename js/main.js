@@ -1,5 +1,14 @@
 /* AMARË — interacciones de interfaz (menú móvil, "leer más") y analítica */
 
+/* Direcciones limpias: si alguien llega con un enlace viejo (…/sobre-nosotros.html o /index.html), la barra de
+   direcciones muestra …/sobre-nosotros o / sin recargar la página. GitHub Pages sirve ambas formas. */
+(function () {
+  var l = window.location;
+  if (!/\.html$/.test(l.pathname) || !window.history || !history.replaceState) return;
+  var limpio = l.pathname.replace(/(^|\/)index\.html$/, '$1').replace(/\.html$/, '');
+  history.replaceState(history.state, '', limpio + l.search + l.hash);
+})();
+
 /* ---------- Analítica ----------
    - Cloudflare Web Analytics: visitas y páginas vistas (sin cookies).
    - Google Analytics 4: visitas + conversiones (se activa al poner el ID "G-...").
@@ -47,7 +56,7 @@
       var card = a.closest('.service-card');
       var titulo = card && card.querySelector('h3');
       window.amareTrack('click_reservar_servicio', { servicio: titulo ? titulo.textContent : '' });
-    } else if (/reservar\.html/.test(href)) {
+    } else if (/(^|\/)reservar(\.html)?([?#]|$)/.test(href)) {
       window.amareTrack('click_reservar', { ubicacion: window.location.pathname });
     }
   });

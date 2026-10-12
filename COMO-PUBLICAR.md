@@ -17,7 +17,7 @@
    ```
 3. Revisar el sitio en local:
    ```
-   python -m http.server 5500
+   python tools/servidor_local.py
    ```
    y abrir http://localhost:5500
 4. Guardar y publicar:
