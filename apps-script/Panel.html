@@ -146,6 +146,36 @@
   .filtros input[type=date]{ flex:0 1 170px; }
   .filtros .btn{ padding:9px 12px; }
   .filtros.oculto{ display:none; }
+  .filtros select{ padding:9px 8px; font:inherit; border:1px solid var(--line); background:#fff; }
+  .filtros .grupo{ display:flex; gap:6px; align-items:flex-end; flex-wrap:wrap; }
+  .filtros .grupo label{ margin:0 0 2px; }
+  .filtros .grupo > div{ display:flex; flex-direction:column; }
+  .filtros .grupo input, .filtros .grupo select{ flex:none; width:auto; }
+  .filtros .grupo input[type=date]{ width:150px; }
+  .filtros .btn.excel{ background:#1d6f42; border-color:#1d6f42; color:#fff; }
+  /* Vista en tabla (Requiere aprobación, Confirmadas, Historial): encabezado fijo y filtro por columna */
+  .tabla-info{ font-size:12px; color:var(--muted); margin:0 0 6px; }
+  .tabla-wrap{ background:#fff; border:1px solid var(--line); overflow:auto; max-height:calc(100vh - var(--cab, 62px) - 190px); min-height:240px; }
+  table.citas{ border-collapse:separate; border-spacing:0; width:100%; font-size:13px; }
+  table.citas th{ position:sticky; top:0; z-index:2; background:var(--black); color:var(--cream); text-align:left; font-size:10px; letter-spacing:.12em;
+    text-transform:uppercase; font-weight:600; padding:10px 10px; white-space:nowrap; cursor:pointer; user-select:none; height:38px; }
+  table.citas th .flecha{ color:var(--taupe); margin-left:4px; }
+  table.citas tr.fcol th{ top:38px; background:var(--sand); padding:5px 6px; cursor:default; height:auto; }
+  table.citas tr.fcol input{ width:100%; min-width:70px; padding:6px 7px; font:inherit; font-size:12px; text-transform:none; letter-spacing:0; border:1px solid var(--line); background:#fff; }
+  table.citas td{ padding:10px; border-bottom:1px solid var(--line); vertical-align:top; white-space:nowrap; }
+  table.citas td.largo{ white-space:normal; min-width:160px; }
+  table.citas tbody tr{ cursor:pointer; }
+  table.citas tbody tr:nth-child(even) td{ background:var(--paper); }
+  table.citas tbody tr:hover td{ background:#f1ece3; }
+  table.citas .chip{ font-size:9px; padding:3px 6px; }
+  .hoja.detalle{ max-width:820px; padding:0; }
+  .hoja.detalle .card{ margin:0; border:0; }
+  .cm-precio{ border:1px solid var(--line); background:var(--paper); padding:10px 12px; margin:0 0 10px; }
+  .cm-precio .opciones{ display:flex; gap:14px; flex-wrap:wrap; margin:6px 0; }
+  .cm-precio .opciones label{ display:flex; gap:6px; align-items:center; font-size:13px; text-transform:none; letter-spacing:0; color:var(--black); margin:0; }
+  .cm-precio .fila{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:6px; }
+  .cm-precio .fila input{ width:140px; }
+  .cm-precio .final{ font-size:15px; margin-top:8px; }
   select{ font:inherit; font-size:16px; padding:8px 10px; border:1px solid var(--line); background:#fff; max-width:100%; }
   .form-panel .campos > div{ flex:1 1 150px; min-width:0; }
   .form-panel .campos input, .form-panel .campos select, .form-panel textarea{ width:100%; }
@@ -187,9 +217,15 @@
 <main>
   <div class="tabs" id="tabs"></div>
   <div class="filtros" id="filtros">
-    <input type="search" id="buscar" placeholder="Buscar por nombre, correo o teléfono" oninput="FILTRO.texto=this.value;pintar()">
-    <input type="date" id="buscarFecha" title="Filtrar por fecha" oninput="FILTRO.fecha=this.value;pintar()">
+    <input type="search" id="buscar" placeholder="Buscar por nombre, correo, teléfono o servicio" oninput="FILTRO.texto=this.value;pintarCuerpo()">
+    <div class="grupo">
+      <div><label>Fecha de</label><select id="fCampo" onchange="FILTRO.campo=this.value;pintarCuerpo()"><option value="cita">la cita</option><option value="solicitada">solicitud</option></select></div>
+      <div><label>Desde</label><input type="date" id="fDesde" oninput="FILTRO.desde=this.value;pintarCuerpo()"></div>
+      <div><label>Hasta</label><input type="date" id="fHasta" oninput="FILTRO.hasta=this.value;pintarCuerpo()"></div>
+      <div><label>Procedimiento</label><select id="fSvc" onchange="FILTRO.servicio=this.value;pintarCuerpo()"><option value="">Todos</option></select></div>
+    </div>
     <button class="btn sec" onclick="limpiarFiltro()">Limpiar</button>
+    <button class="btn excel" onclick="descargarExcel()" title="Descarga lo que ves ahora, con los filtros aplicados">Descargar Excel</button>
   </div>
   <div id="lista"><p class="vacio">Cargando reservas…</p></div>
 </main>
@@ -199,7 +235,10 @@
 <script>
   var DATOS = { reservas: [], ajustes: { limiteHoras: 6, tope: 4 }, modos: {}, horasSinDuracion: 2,
                 activos: ['pago_por_validar','pago_aprobado','cita_agendada','cita_confirmada','requiere_aprobacion'], agenda: [], hoy: '' };
-  var FILTRO = { texto: '', fecha: '' };
+  var FILTRO = { texto: '', campo: 'cita', desde: '', hasta: '', servicio: '' };
+  var FCOL = {};      // pestaña → { columna: texto } (filtros por columna)
+  var ORDEN = {};     // pestaña → { k: columna, dir: 1 | -1 }
+  var DETALLE = null; // reserva abierta en la ventana de detalle
   var ARRASTRANDO = null;  // id de la reserva que se está arrastrando hacia una pestaña
   var CARGA = {};          // fecha -> ocupación, calculada aquí mismo para que sea instantánea
   var CACHE = {};          // fecha -> eventos de Google Calendar de ese día
@@ -401,9 +440,12 @@
   }
   function soloDigitos(t){ return String(t || '').replace(/\D/g, ''); }
   function sinTildes(t){ return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
-  /** Búsqueda por nombre, correo, teléfono y fecha (solicitada o en calendario). */
+  /** Filtros de arriba: texto, rango de fechas (de la cita o de la solicitud) y procedimiento. */
   function pasaFiltro(r){
-    if (FILTRO.fecha && r.fecha_solicitada !== FILTRO.fecha && r.fecha_cita !== FILTRO.fecha) return false;
+    var f = FILTRO.campo === 'solicitada' ? r.fecha_solicitada : (r.fecha_cita || (TAB === 'requiere_aprobacion' ? r.fecha_solicitada : ''));
+    if (FILTRO.desde && (!f || f < FILTRO.desde)) return false;
+    if (FILTRO.hasta && (!f || f > FILTRO.hasta)) return false;
+    if (FILTRO.servicio && r.servicio !== FILTRO.servicio) return false;
     var q = sinTildes(FILTRO.texto).trim();
     if (!q) return true;
     var dq = soloDigitos(q);
@@ -411,9 +453,149 @@
       (dq.length >= 3 && soloDigitos(r.celular).indexOf(dq) >= 0) || String(r.id).toLowerCase().indexOf(q) >= 0;
   }
   function limpiarFiltro(){
-    FILTRO = { texto: '', fecha: '' };
-    document.getElementById('buscar').value = ''; document.getElementById('buscarFecha').value = '';
+    FILTRO = { texto: '', campo: 'cita', desde: '', hasta: '', servicio: '' };
+    FCOL[TAB] = {};
+    ['buscar', 'fDesde', 'fHasta'].forEach(function(id){ document.getElementById(id).value = ''; });
+    document.getElementById('fCampo').value = 'cita'; document.getElementById('fSvc').value = '';
     pintar();
+  }
+
+  // ---------------------------------------------------------------- columnas de cada pestaña
+  function fechaTabla(iso){ if (!iso) return ''; var p = String(iso).slice(0, 10).split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
+  function fechaHoraTabla(v){
+    if (!v) return '';
+    var d = new Date(v); if (isNaN(d)) return String(v);
+    return fechaTabla(isoDe(d)) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  function precioTabla(r){
+    var a = Number(r.precio_min) || 0, b = Number(r.precio_max) || 0;
+    if (!a && !b) return '';
+    return !b || a === b ? colones(a || b) : colones(a) + ' – ' + colones(b);
+  }
+  var NOMBRE_ESTADO = { requiere_aprobacion: 'Requiere aprobación', pago_por_validar: 'Pago por validar', pago_aprobado: 'Pago aprobado',
+    dia_saturado: 'Día saturado', cita_agendada: 'En calendario', cita_confirmada: 'Confirmada', pago_rechazado: 'Pago rechazado',
+    cancelada: 'Cancelada', completada: 'Completada', no_asistio: 'No asistió' };
+  // Cada columna: t = título, v = valor (texto que se ve, se filtra y va al Excel), o = valor para ordenar
+  var C = {
+    fs: { t: 'Fecha solicitada', v: function(r){ return fechaTabla(r.fecha_solicitada); }, o: function(r){ return r.fecha_solicitada || ''; } },
+    hs: { t: 'Hora', v: function(r){ return r.hora_solicitada ? h12(r.hora_solicitada) : (r.franja || ''); }, o: function(r){ return r.hora_solicitada || ''; } },
+    fc: { t: 'Fecha de la cita', v: function(r){ return fechaTabla(r.fecha_cita); }, o: function(r){ return (r.fecha_cita || '') + (r.hora_inicio || ''); } },
+    hc: { t: 'Hora', v: function(r){ return r.hora_inicio ? h12(r.hora_inicio) + (r.hora_fin ? ' – ' + h12(r.hora_fin) : '') : ''; }, o: function(r){ return r.hora_inicio || ''; } },
+    nombre: { t: 'Clienta', v: function(r){ return r.nombre || ''; } },
+    cel: { t: 'Teléfono', v: function(r){ return r.celular || ''; } },
+    svc: { t: 'Servicio', v: function(r){ return r.servicio || ''; }, largo: true },
+    largo: { t: 'Largo', v: function(r){ return r.largo || ''; } },
+    precio: { t: 'Precio', v: precioTabla, o: function(r){ return Number(r.precio_max) || Number(r.precio_min) || 0; } },
+    dep: { t: 'Depósito', v: function(r){ return Number(r.deposito) > 0 ? colones(r.deposito) : 'No'; }, o: function(r){ return Number(r.deposito) || 0; } },
+    origen: { t: 'Origen', v: function(r){ return r.origen === 'manual' ? 'Manual' : 'Web'; } },
+    tipo: { t: 'Nueva / regular', v: function(r){ return r.tipo_cliente === 'nuevo' ? 'Nueva' : (r.tipo_cliente ? 'Regular' : ''); } },
+    creado: { t: 'Recibida el', v: function(r){ return fechaHoraTabla(r.creado); }, o: function(r){ return String(r.creado || ''); } },
+    estado: { t: 'Estado', v: function(r){ return NOMBRE_ESTADO[r.estado] || r.estado; } }
+  };
+  var COLUMNAS = {
+    requiere_aprobacion: ['fs', 'hs', 'nombre', 'cel', 'svc', 'largo', 'precio', 'tipo', 'creado'],
+    cita_confirmada: ['fc', 'hc', 'nombre', 'cel', 'svc', 'largo', 'precio', 'dep', 'origen', 'fs'],
+    historial: ['fc', 'nombre', 'cel', 'svc', 'precio', 'estado', 'fs']
+  };
+  var ORDEN_INICIAL = { requiere_aprobacion: { k: 'fs', dir: 1 }, cita_confirmada: { k: 'fc', dir: 1 }, historial: { k: 'fc', dir: -1 } };
+  function ordenDe(tab){ return ORDEN[tab] || ORDEN_INICIAL[tab] || { k: COLUMNAS[tab][0], dir: 1 }; }
+  function ordenar(k){
+    var o = ordenDe(TAB);
+    ORDEN[TAB] = { k: k, dir: o.k === k ? -o.dir : 1 };
+    pintar();
+  }
+  function filtrarCol(k, valor){ (FCOL[TAB] = FCOL[TAB] || {})[k] = valor; pintarCuerpo(); }
+  /** Filas de la pestaña actual con todos los filtros y el orden aplicados (lo mismo que se descarga). */
+  function filasVista(){
+    var cols = COLUMNAS[TAB], fc = FCOL[TAB] || {}, o = ordenDe(TAB), col = C[o.k];
+    var lista = DATOS.reservas.filter(function(r){
+      if (!enTab(r, TAB) || !pasaFiltro(r)) return false;
+      return cols.every(function(k){ var q = sinTildes(fc[k] || '').trim(); return !q || sinTildes(C[k].v(r)).indexOf(q) >= 0; });
+    });
+    var val = col.o || col.v;
+    return lista.sort(function(a, b){
+      var x = val(a), y = val(b);
+      var c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'es');
+      return c * o.dir;
+    });
+  }
+  function pintarTabla(){
+    var cols = COLUMNAS[TAB], fc = FCOL[TAB] || {}, o = ordenDe(TAB);
+    // Procedimientos de esta pestaña para el filtro
+    var sel = document.getElementById('fSvc'), svcs = [];
+    DATOS.reservas.forEach(function(r){ if (enTab(r, TAB) && r.servicio && svcs.indexOf(r.servicio) < 0) svcs.push(r.servicio); });
+    svcs.sort(function(a, b){ return a.localeCompare(b, 'es'); });
+    if (FILTRO.servicio && svcs.indexOf(FILTRO.servicio) < 0) svcs.unshift(FILTRO.servicio);
+    sel.innerHTML = '<option value="">Todos</option>' + svcs.map(function(x){ return '<option' + (x === FILTRO.servicio ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('');
+    document.getElementById('lista').innerHTML = '<p class="tabla-info" id="tablaInfo"></p><div class="tabla-wrap"><table class="citas"><thead><tr>' +
+      cols.map(function(k){ return '<th onclick="ordenar(\'' + k + '\')" title="Ordenar">' + C[k].t + (o.k === k ? '<span class="flecha">' + (o.dir > 0 ? '▲' : '▼') + '</span>' : '') + '</th>'; }).join('') +
+      '</tr><tr class="fcol">' + cols.map(function(k){ return '<th><input type="search" placeholder="Filtrar" value="' + esc(fc[k] || '') + '" oninput="filtrarCol(\'' + k + '\', this.value)"></th>'; }).join('') +
+      '</tr></thead><tbody id="tablaCuerpo"></tbody></table></div>';
+    pintarCuerpo();
+  }
+  function pintarCuerpo(){
+    var cuerpo = document.getElementById('tablaCuerpo');
+    if (!cuerpo) return pintar();
+    var cols = COLUMNAS[TAB], filas = filasVista(), total = DATOS.reservas.filter(function(r){ return enTab(r, TAB); }).length;
+    cuerpo.innerHTML = filas.length ? filas.map(function(r){
+      return '<tr draggable="true" ondragstart="empezarArrastre(event,\'' + r.id + '\')" ondragend="terminarArrastre()" onclick="verDetalle(\'' + r.id + '\')">' +
+        cols.map(function(k){
+          var txt = esc(C[k].v(r));
+          if (k === 'nombre' && TAB === 'requiere_aprobacion' && r.estado !== 'requiere_aprobacion') txt += ' ' + chipEstado(r.estado);
+          if (k === 'nombre' && r.origen === 'manual' && TAB !== 'cita_confirmada') txt += ' <span class="chip">Manual</span>';
+          if (k === 'estado') txt = chipEstado(r.estado);
+          return '<td' + (C[k].largo ? ' class="largo"' : '') + '>' + txt + '</td>';
+        }).join('') + '</tr>';
+    }).join('') : '<tr><td colspan="' + cols.length + '" class="vacio">' + (total ? 'Ninguna cita coincide con los filtros.' : 'No hay citas en esta sección.') + '</td></tr>';
+    document.getElementById('tablaInfo').textContent = filas.length === total ? total + ' citas' : 'Mostrando ' + filas.length + ' de ' + total + ' citas (con filtros)';
+  }
+
+  // ---------------------------------------------------------------- detalle de una cita (ventana)
+  function verDetalle(id){
+    var r = reservaPorId(id); if (!r) return;
+    DETALLE = id;
+    var hoja = document.getElementById('hoja');
+    hoja.className = 'hoja detalle';
+    hoja.innerHTML = '<div style="display:flex;justify-content:flex-end;padding:10px 12px 0"><button class="btn sec" onclick="cerrarModal()">Cerrar</button></div>' + tarjeta(r);
+    document.getElementById('modal').classList.add('abierto');
+  }
+  /** Si la ventana de detalle está abierta, se vuelve a pintar con los datos nuevos (o se cierra si la reserva ya no está). */
+  function refrescarDetalle(){
+    var hoja = document.getElementById('hoja');
+    if (!DETALLE || !hoja.classList.contains('detalle') || !document.getElementById('modal').classList.contains('abierto')) return;
+    if (!reservaPorId(DETALLE)) return cerrarModal();
+    var abierto = document.querySelector('#hoja .paso:not(.oculto)');
+    verDetalle(DETALLE);
+    if (abierto) { var f = document.getElementById(abierto.id); if (f) { f.classList.remove('oculto'); pintarPrevia(DETALLE); } }
+  }
+
+  // ---------------------------------------------------------------- Excel (lo que se ve, con los filtros)
+  function cargarXLSX(listo){
+    if (window.XLSX) return listo();
+    var sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    sc.onload = listo;
+    sc.onerror = function(){ aviso('No se pudo cargar el generador de Excel. Revisa la conexión.', true); };
+    document.head.appendChild(sc);
+  }
+  function descargarExcel(){
+    if (TAB === 'agenda') return;
+    var cols = COLUMNAS[TAB], filas = filasVista();
+    if (!filas.length) return aviso('No hay citas para descargar con estos filtros.', true);
+    aviso('Preparando el Excel…');
+    cargarXLSX(function(){
+      var datos = [cols.map(function(k){ return C[k].t; })].concat(filas.map(function(r){ return cols.map(function(k){ return C[k].v(r); }); }));
+      var hojaX = XLSX.utils.aoa_to_sheet(datos);
+      hojaX['!cols'] = cols.map(function(k, i){
+        return { wch: Math.min(40, Math.max.apply(null, datos.map(function(f){ return String(f[i] || '').length; })) + 2) };
+      });
+      hojaX['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: datos.length - 1, c: cols.length - 1 } }) };
+      var libro = XLSX.utils.book_new();
+      var nombreTab = { requiere_aprobacion: 'Requiere aprobación', cita_confirmada: 'Confirmadas', historial: 'Historial' }[TAB];
+      XLSX.utils.book_append_sheet(libro, hojaX, nombreTab.slice(0, 31));
+      XLSX.writeFile(libro, 'Amare - ' + nombreTab + ' - ' + (DATOS.hoy || isoDe(new Date())) + '.xlsx');
+      aviso('Excel descargado ✓ (' + filas.length + ' citas)');
+    });
   }
   function pintarTabs(){
     document.getElementById('tabs').innerHTML = TABS.map(function(t){
@@ -425,24 +607,19 @@
   function irTab(t){ TAB = t; pintar(); window.scrollTo(0, 0); }
   function pintar(){
     calcularCarga();
-    document.querySelector('main').classList.toggle('ancho', TAB === 'agenda');
+    document.querySelector('main').classList.add('ancho');
     pintarTabs();
     document.getElementById('filtros').classList.toggle('oculto', TAB === 'agenda');
     if (TAB === 'agenda') return pintarAgenda();
-    var lista = DATOS.reservas.filter(function(r){ return enTab(r, TAB) && pasaFiltro(r); });
-    if (TAB === 'cita_confirmada' || TAB === 'por_agendar') lista.sort(function(a,b){ return ((a.fecha_cita || a.fecha_solicitada) + a.hora_inicio).localeCompare((b.fecha_cita || b.fecha_solicitada) + b.hora_inicio); });
-    var filtrando = FILTRO.texto || FILTRO.fecha;
-    document.getElementById('lista').innerHTML = lista.length ? lista.map(tarjeta).join('') :
-      '<p class="vacio">' + (filtrando ? 'Ninguna reserva de esta sección coincide con la búsqueda.' : 'No hay reservas en esta sección.') + '</p>';
-    lista.forEach(function(r){ var f = document.getElementById('f-' + r.id); if (f && !f.classList.contains('oculto')) pintarPrevia(r.id); });
+    if (COLUMNAS[TAB]) pintarTabla();
+    refrescarDetalle();
   }
   function irAReserva(id){
     cerrarModal();
     var r = reservaPorId(id); if (!r) return;
     TAB = TABS.map(function(t){ return t[0]; }).filter(function(t){ return t !== 'agenda' && enTab(r, t); })[0] || 'historial';
     pintar();
-    var c = document.getElementById('c-' + id);
-    if (c) { c.classList.add('resaltada'); c.scrollIntoView({ behavior:'smooth', block:'start' }); }
+    verDetalle(id);
   }
 
   // ---------------------------------------------------------------- columna de un día (agenda y vista previa)
@@ -656,7 +833,7 @@
     procesarCola();
   }
 
-  function cerrarModal(){ document.getElementById('modal').classList.remove('abierto'); document.getElementById('hoja').className = 'hoja'; }
+  function cerrarModal(){ DETALLE = null; document.getElementById('modal').classList.remove('abierto'); document.getElementById('hoja').className = 'hoja'; }
 
   // ---------------------------------------------------------------- tarjetas
   function textoCarga(fecha){
@@ -1124,7 +1301,7 @@
             '<div><label>Servicio</label><select id="cm-svc" onchange="cmSvc()"><option value="">Elige la categoría</option></select></div>' +
             '<div><label>Largo</label><select id="cm-largo" onchange="cmLargo()"><option value="">—</option></select></div>'
           : '<div><label>Servicio</label><input id="cm-svc-txt" placeholder="Ej. Balayage"></div>') +
-      '</div><div class="campos">' +
+      '</div><div id="cm-precio"></div><div class="campos">' +
         '<div><label>Fecha</label><input type="date" id="cm-fecha" value="' + (fecha || hoy) + '" oninput="cmCarga()"></div>' +
         '<div><label>Hora de inicio</label><input type="time" id="cm-hi" value="09:00" step="900"></div>' +
         '<div><label>Duración (horas)</label><input type="number" id="cm-dur" value="2" min="0.25" max="14" step="0.25"></div>' +
@@ -1141,6 +1318,65 @@
       '<div class="acciones"><button class="btn" onclick="crearManual()">Agregar cita</button><button class="btn sec" onclick="cerrarModal()">Cancelar</button></div>';
     document.getElementById('modal').classList.add('abierto');
     cmCarga();
+    cmPrecioUI();
+    // Precios cambiados o con descuento desde el botón "Precios" (para mostrar el precio vigente)
+    if (!PRECIOS) google.script.run.withSuccessHandler(function(p){ PRECIOS = p || {}; cmPrecioUI(true); }).obtenerPrecios();
+  }
+  /** Precio vigente del servicio y largo elegidos: [min, max], o null si no hay servicio del catálogo. */
+  function cmPrecioLista(){
+    var s = cmServicio(), largo = (document.getElementById('cm-largo') || {}).value, t = s && s.tiers[largo];
+    if (!t) return null;
+    var p = PRECIOS && PRECIOS[s.servicio], hoy = DATOS.hoy || isoDe(new Date());
+    if (p && p.oferta && p.oferta[largo] && (!p.vence || p.vence >= hoy)) return p.oferta[largo];
+    if (p && p.normal && p.normal[largo]) return p.normal[largo];
+    return [t.min, t.max];
+  }
+  /** Bloque de precio: normal (de lista), precio especial o descuento para esta cita. */
+  function cmPrecioUI(conservar){
+    var caja = document.getElementById('cm-precio'); if (!caja) return;
+    var lista = cmPrecioLista(), modo = conservar ? cmModoPrecio() : (lista ? 'normal' : 'especial');
+    var vEsp = conservar ? (document.getElementById('cm-pesp') || {}).value || '' : '';
+    var vDesc = conservar ? (document.getElementById('cm-desc') || {}).value || '' : '', tDesc = conservar ? (document.getElementById('cm-desc-tipo') || {}).value || '%' : '%';
+    function radio(v, txt, dis){ return '<label><input type="radio" name="cm-pt" value="' + v + '"' + (modo === v ? ' checked' : '') + (dis ? ' disabled' : '') + ' onchange="cmPrecioCampos()"> ' + txt + '</label>'; }
+    caja.innerHTML = '<div class="cm-precio"><label>Precio</label>' +
+      '<div>' + (lista ? 'Precio de lista: <b>' + prTexto(lista) + '</b>' : '<span class="nota">Elige servicio y largo para ver el precio de lista.</span>') + '</div>' +
+      '<div class="opciones">' + radio('normal', 'Precio de lista', !lista) + radio('especial', 'Precio especial') + radio('descuento', 'Descuento', !lista) + '</div>' +
+      '<div class="fila" id="cm-f-esp"><span>₡</span><input id="cm-pesp" inputmode="numeric" placeholder="Ej. 45000" value="' + esc(vEsp) + '" oninput="cmPrecioCalc()"></div>' +
+      '<div class="fila" id="cm-f-desc"><input id="cm-desc" inputmode="numeric" placeholder="Ej. 10" value="' + esc(vDesc) + '" oninput="cmPrecioCalc()">' +
+        '<select id="cm-desc-tipo" onchange="cmPrecioCalc()"><option value="%"' + (tDesc === '%' ? ' selected' : '') + '>% de descuento</option><option value="₡"' + (tDesc === '₡' ? ' selected' : '') + '>₡ de descuento</option></select></div>' +
+      '<div class="final" id="cm-pfinal"></div>' +
+      '<p class="nota">Este es el precio que sale en el WhatsApp y el correo de confirmación ("Inversión").</p></div>';
+    cmPrecioCampos();
+  }
+  function cmModoPrecio(){ var r = document.querySelector('input[name=cm-pt]:checked'); return r ? r.value : 'normal'; }
+  function cmPrecioCampos(){
+    var m = cmModoPrecio();
+    document.getElementById('cm-f-esp').style.display = m === 'especial' ? 'flex' : 'none';
+    document.getElementById('cm-f-desc').style.display = m === 'descuento' ? 'flex' : 'none';
+    cmPrecioCalc();
+  }
+  /** Precio final de la cita: { rango: [min, max], nota } o { error }. */
+  function cmPrecioFinal(){
+    var lista = cmPrecioLista(), m = cmModoPrecio(), num = function(id){ return Number(String((document.getElementById(id) || {}).value || '').replace(/[^\d.]/g, '')) || 0; };
+    if (m === 'especial') {
+      var e = Math.round(num('cm-pesp'));
+      if (!(e > 0)) return { error: 'Escribe el precio especial.' };
+      return { rango: [e, e], nota: 'precio especial ' + colones(e) + (lista ? ' (lista ' + prTexto(lista) + ')' : '') };
+    }
+    if (!lista) return { rango: [0, 0], nota: '' };
+    if (m === 'descuento') {
+      var d = num('cm-desc'), pct = document.getElementById('cm-desc-tipo').value === '%';
+      if (!(d > 0) || (pct && d >= 100)) return { error: pct ? 'Escribe un descuento entre 1 y 99 %.' : 'Escribe el monto del descuento.' };
+      var r = lista.map(function(x){ return Math.max(0, Math.round(pct ? x * (100 - d) / 100 : x - d)); });
+      if (!(r[1] > 0)) return { error: 'El descuento no puede ser mayor que el precio.' };
+      return { rango: r, nota: 'descuento ' + (pct ? d + ' %' : colones(d)) + ' (lista ' + prTexto(lista) + ')' };
+    }
+    return { rango: lista, nota: '' };
+  }
+  function cmPrecioCalc(){
+    var el = document.getElementById('cm-pfinal'); if (!el) return;
+    var f = cmPrecioFinal();
+    el.innerHTML = f.error ? '<span class="nota">' + esc(f.error) + '</span>' : (f.rango[1] ? 'Precio final: <b>' + prTexto(f.rango) + '</b>' : '');
   }
   function cmServicio(){
     var cat = document.getElementById('cm-cat'), svc = document.getElementById('cm-svc');
@@ -1158,11 +1394,13 @@
     document.getElementById('cm-largo').innerHTML = s ? Object.keys(s.tiers).map(function(l){ return '<option>' + esc(l) + '</option>'; }).join('') : '<option value="">—</option>';
     if (s && s.horas && s.horas.length) document.getElementById('cm-hi').value = String(s.horas[0]).padStart(2, '0') + ':00';
     cmLargo();
+    cmPrecioUI();
   }
   function cmLargo(){
     var s = cmServicio(); if (!s) return;
     var t = s.tiers[document.getElementById('cm-largo').value];
     if (t) document.getElementById('cm-dur').value = Number(t.durMax) || Number(t.durMin) || 2;
+    cmPrecioUI(true);
   }
   function cmCarga(){
     var f = document.getElementById('cm-fecha').value, c = document.getElementById('cm-carga');
@@ -1178,9 +1416,11 @@
     if (!(dur > 0)) return aviso('La duración debe ser mayor que cero.', true);
     var correo = v('cm-correo');
     if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(correo)) return aviso('El correo no es válido.', true);
+    var precio = cmPrecioFinal();
+    if (precio.error) return aviso(precio.error, true);
     var datos = {
       categoria: s ? s.categoria : '', servicio: servicio, codigo: s ? s.codigo : '', largo: t ? largo : '',
-      precio_min: t ? t.min : 0, precio_max: t ? t.max : 0, dur_min_h: t ? t.durMin : dur, dur_max_h: dur,
+      precio_min: precio.rango[0], precio_max: precio.rango[1], precio_nota: precio.nota, dur_min_h: t ? t.durMin : dur, dur_max_h: dur,
       nombre: v('cm-nombre'), celular: v('cm-cel'), correo: correo, comentarios: v('cm-notas'),
       fecha: f, horaInicio: hi, horaFin: sumarHoras(hi, dur),
       enviarWhatsapp: document.getElementById('cm-wa').checked && !!v('cm-cel'),

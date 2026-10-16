@@ -80,10 +80,10 @@ if __name__ == '__main__':
 
 
 # Versión clara (crema), la que se usa en las 3 plantillas activas: misma composición, colores del sitio.
-CLARAS = {
-    'reserva_confirmada': ('RESERVA CONFIRMADA', ['Tu espacio', 'está reservado']),
-    'recordatorio_3_dias': ('RECORDATORIO', ['Tu cita es', 'en 3 días']),
-    'recordatorio_1_dia': ('RECORDATORIO', ['¡Mañana', 'es tu cita!']),
+CLARAS = {  # archivo de salida → (título pequeño, titular)
+    'crema-reserva': ('RESERVA CONFIRMADA', ['Tu espacio', 'está reservado']),
+    'crema-3-dias': ('RECORDATORIO', ['Tu cita es', 'en 3 días']),
+    'crema-manana': ('RECORDATORIO', ['¡Mañana', 'es tu cita!']),
 }
 TINTA, FONDO_CREMA, MARRON = (11, 11, 11), (245, 241, 234), (90, 81, 72)
 
@@ -95,9 +95,7 @@ def tarjeta_clara(clave, eyebrow, titular):
     d.rectangle((38, 38, W - 38, H - 38), outline=(222, 212, 196), width=1)
     cx = 330
     d.ellipse((cx - 92, 110, cx + 92, 294), outline=TAUPE_OSC, width=2)
-    centrado(d, cx, 138, 'A', fuente('georgia.ttf', 116), TINTA)
-    for dx in (-17, 17):
-        d.ellipse((cx + dx - 6, 140, cx + dx + 6, 152), fill=TAUPE_OSC)
+    centrado(d, cx, 150, 'A', fuente('georgia.ttf', 116), TINTA)  # sin los puntos de la Ë (pedido del cliente)
     centrado(d, cx, 330, 'AMARË', fuente('georgia.ttf', 78), TINTA)
     espaciado(d, (cx, 432), 'BEAUTY CENTER', fuente('segoeui.ttf', 20), TAUPE_OSC, 8, centro=True)
     d.line((600, 150, 600, H - 150), fill=TAUPE, width=1)
@@ -109,7 +107,7 @@ def tarjeta_clara(clave, eyebrow, titular):
         d.text((x0, y), linea, font=fuente('georgiai.ttf', 54), fill=TINTA)
         y += 68
     espaciado(d, (x0, H - 112), 'San José, Santa Ana  ·  amarecr.com', fuente('segoeui.ttf', 19), MARRON, 1)
-    destino = SALIDA / f'claro-{clave}.jpg'
+    destino = SALIDA / f'{clave}.jpg'
     im.save(destino, 'JPEG', quality=92, optimize=True, progressive=True)
     return destino
 

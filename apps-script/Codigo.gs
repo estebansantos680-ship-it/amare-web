@@ -73,16 +73,31 @@ var CONFIG = {
     // plantilla → orden de las variables {{1}}, {{2}}… (deben coincidir con las plantillas aprobadas en Meta)
     // Solo las plantillas creadas y aprobadas en Meta (crearPlantillasWhatsApp). Las demás no se envían por WhatsApp.
     plantillas: {
+      // Nuevas (textos del cliente, 16-oct-2026)
+      confirmacion_reserva: ['fecha_dia', 'hora', 'servicio', 'inversion'],
+      recordatorio_72h: [],
+      recordatorio_24h: ['hora'],
+      // Anteriores (aprobadas): se usan mientras Meta revisa las nuevas
       reserva_confirmada: ['fecha_dia', 'hora', 'servicio', 'inversion'],
       recordatorio_3_dias: ['fecha_dia', 'hora', 'servicio'],
       recordatorio_1_dia: ['hora']
     },
+    // Aviso → plantillas en orden de preferencia: se envía la primera que Meta tenga APROBADA.
+    preferencia: {
+      confirmada: ['confirmacion_reserva', 'reserva_confirmada'],
+      actualizada: ['confirmacion_reserva', 'reserva_confirmada'],  // al mover la cita: mismo mensaje con la nueva fecha
+      recordatorio3: ['recordatorio_72h', 'recordatorio_3_dias'],
+      recordatorio1: ['recordatorio_24h', 'recordatorio_1_dia']
+    },
     // Encabezado de cada plantilla: tarjeta crema con el logo y el título (tools/generar_whatsapp_headers.py →
     // assets/wa/claro-*.jpg). La imagen se envía con cada mensaje; "imagen" queda para las que no tengan la suya.
     imagenes: {
-      reserva_confirmada: 'https://amarecr.com/assets/wa/claro-reserva_confirmada.jpg',
-      recordatorio_3_dias: 'https://amarecr.com/assets/wa/claro-recordatorio_3_dias.jpg',
-      recordatorio_1_dia: 'https://amarecr.com/assets/wa/claro-recordatorio_1_dia.jpg'
+      confirmacion_reserva: 'https://amarecr.com/assets/wa/crema-reserva.jpg',
+      recordatorio_72h: 'https://amarecr.com/assets/wa/crema-3-dias.jpg',
+      recordatorio_24h: 'https://amarecr.com/assets/wa/crema-manana.jpg',
+      reserva_confirmada: 'https://amarecr.com/assets/wa/crema-reserva.jpg',
+      recordatorio_3_dias: 'https://amarecr.com/assets/wa/crema-3-dias.jpg',
+      recordatorio_1_dia: 'https://amarecr.com/assets/wa/crema-manana.jpg'
     },
     imagen: 'https://amarecr.com/assets/wa/logo.jpg',
     appId: '2406232719906991'
@@ -1082,7 +1097,7 @@ function crearCitaManual(datos) {
   try {
     r.id = 'AM-' + Utilities.formatDate(new Date(), CONFIG.ZONA, 'yyMMdd-HHmmss') + '-' + Math.floor(Math.random() * 900 + 100);
     r.creado = new Date();
-    r.historial = fechaTexto_(new Date()) + ' · cita creada desde el panel';
+    r.historial = fechaTexto_(new Date()) + ' · cita creada desde el panel' + (t(datos.precio_nota, 200) ? ' · ' + t(datos.precio_nota, 200) : '');
     guardarFila_(r);
     SpreadsheetApp.flush();
   } finally {
@@ -1244,8 +1259,7 @@ function avisarClienta_(r, tipo, canales) {
     confirmada: ['citaConfirmada'], actualizada: ['citaConfirmada'], recordatorio1: ['recordatorio'], recordatorio3: ['recordatorio3d'],
     revision: ['solicitud', { nota_pago: 'Recibimos su reserva. ' + MENSAJE_APROBACION + ' Le escribiremos para confirmarla.' }]
   }[tipo];
-  var wa = { confirmada: 'reserva_confirmada', actualizada: 'cita_actualizada', revision: 'reserva_en_revision',
-             recordatorio3: 'recordatorio_3_dias', recordatorio1: 'recordatorio_1_dia' }[tipo];
+  var wa = plantillaAprobada_(CONFIG.WHATSAPP_API.preferencia[tipo]);
   // Se preparan las dos solicitudes y salen en paralelo (la reserva en la web espera menos).
   var tareas = [];
   if (canales.correo && r.correo && correo) {
@@ -1323,6 +1337,37 @@ function solicitudWhatsApp_(plantilla, r) {
   };
 }
 
+/**
+ * Primera plantilla de la lista que Meta tiene APROBADA (se consulta cada 30 min). Así, cuando Meta aprueba una
+ * plantilla nueva, el sistema la empieza a usar solo, y mientras tanto sigue con la anterior.
+ */
+function plantillaAprobada_(lista) {
+  if (!lista || !lista.length) return null;
+  var aprobadas = plantillasAprobadas_();
+  if (!aprobadas) return lista[lista.length - 1];  // no se pudo consultar: la anterior (ya aprobada)
+  for (var i = 0; i < lista.length; i++) if (aprobadas.indexOf(lista[i]) >= 0) return lista[i];
+  return null;
+}
+function plantillasAprobadas_() {
+  var cache = CacheService.getScriptCache(), guardado = cache.get('wa_aprobadas');
+  if (guardado) return JSON.parse(guardado);
+  if (!whatsappListo_()) return null;
+  try {
+    var p = PropertiesService.getScriptProperties();
+    var resp = UrlFetchApp.fetch('https://graph.facebook.com/' + CONFIG.WHATSAPP_API.version + '/' +
+      (p.getProperty('WHATSAPP_WABA_ID') || '391116127424870') + '/message_templates?fields=name,status&limit=100',
+      { headers: { Authorization: 'Bearer ' + p.getProperty('WHATSAPP_TOKEN') }, muteHttpExceptions: true });
+    if (resp.getResponseCode() >= 300) return null;
+    var nombres = JSON.parse(resp.getContentText()).data
+      .filter(function (t) { return t.status === 'APPROVED'; }).map(function (t) { return t.name; });
+    cache.put('wa_aprobadas', JSON.stringify(nombres), 1800);
+    return nombres;
+  } catch (e) {
+    console.error('No se pudo consultar las plantillas: ' + e);
+    return null;
+  }
+}
+
 /** Precio para el mensaje: "₡40.000" o "₡40.000 – ₡50.000". */
 function inversion_(r) {
   var a = Number(r.precio_min) || 0, b = Number(r.precio_max) || 0;
@@ -1334,7 +1379,7 @@ function componentesWhatsApp_(plantilla, orden, vals) {
   var c = [];
   var img = (CONFIG.WHATSAPP_API.imagenes || {})[plantilla] || CONFIG.WHATSAPP_API.imagen;
   if (img) c.push({ type: 'header', parameters: [{ type: 'image', image: { link: img } }] });
-  c.push({ type: 'body', parameters: orden.map(function (k) { return { type: 'text', text: String(vals[k] || '') }; }) });
+  if (orden.length) c.push({ type: 'body', parameters: orden.map(function (k) { return { type: 'text', text: String(vals[k] || '') }; }) });
   return c;
 }
 
@@ -1364,6 +1409,28 @@ function configurarWhatsApp() {
 
 // Textos aprobados por el cliente (oct-2026). {{n}} = variables en el orden de CONFIG.WHATSAPP_API.plantillas.
 var PLANTILLAS_WHATSAPP = {
+  // ---- Textos nuevos del cliente (16-oct-2026)
+  confirmacion_reserva: {
+    texto: 'Hola, esperamos que te encuentres muy bien.\n\nEn Amarë hemos reservado un espacio especial para ti.\n\n' +
+      '📌 {{1}}\n⏰ {{2}}\n📍 Servicio: {{3}}\n💲 Inversión: {{4}}\n\n' +
+      'Gracias por elegirnos y confiar en nuestro equipo.\n\nAmarë Beauty Center',
+    ejemplo: ['Martes 3 de octubre', '9:00 a.m.', 'Nanoplastia', '₡40.000']
+  },
+  recordatorio_72h: {
+    texto: 'Buenas, esperamos que te encuentres muy bien.\n\nQueremos recordarte tu cita para dentro de 3 días.\n\n' +
+      'Será un gusto recibirte en AMARË Beauty Center y brindarte una experiencia especial, con la atención y el cuidado que mereces.\n\n' +
+      '📍 Encuentra nuestra ubicación en Waze como Amare Beauty Center o https://www.waze.com/live-map/directions?navigate=yes&to=ll.9.9252005%2C-84.1987\n\n' +
+      'Gracias por tu preferencia y por confiar en AMARË.\n\nUn espacio donde la belleza nace del amor por servir.',
+    ejemplo: []
+  },
+  recordatorio_24h: {
+    texto: 'Buenas, esperamos que te encuentres muy bien.\n\nQueremos confirmar tu cita para mañana a las {{1}}. ¿Nos confirmas tu asistencia, por favor?\n\n' +
+      'Será un gusto recibirte en AMARË Beauty Center y brindarte una experiencia especial, con la atención y el cuidado que mereces.\n\n' +
+      '📍 Encuentra nuestra ubicación en Waze como Amare Beauty Center o https://www.waze.com/live-map/directions?navigate=yes&to=ll.9.9252005%2C-84.1987\n\n' +
+      'Gracias por tu preferencia y por confiar en AMARË.\n\nUn espacio donde la belleza nace del amor por servir.',
+    ejemplo: ['9:00 a.m.']
+  },
+  // ---- Versión anterior (aprobada; respaldo mientras Meta revisa las nuevas)
   reserva_confirmada: {
     texto: 'Hola 👋🏻 esperamos que te encuentres muy bien ✨\n\nEn Amarë hemos reservado un espacio especial para ti:\n\n' +
       '📌 {{1}}\n⏰ {{2}}\n📍 Servicio: {{3}}\n💲 Inversión: {{4}}\n\n' +
@@ -1408,7 +1475,7 @@ function crearPlantillasWhatsApp() {
         name: nombre, language: CONFIG.WHATSAPP_API.idioma, category: 'UTILITY',
         components: [
           { type: 'HEADER', format: 'IMAGE', example: { header_handle: [handle] } },
-          { type: 'BODY', text: t.texto, example: { body_text: [t.ejemplo] } }
+          t.ejemplo.length ? { type: 'BODY', text: t.texto, example: { body_text: [t.ejemplo] } } : { type: 'BODY', text: t.texto }
         ]
       })
     });
